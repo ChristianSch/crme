@@ -46,7 +46,7 @@ func (s EmailService) CreateAccount(ctx context.Context, a domain.EmailAccount) 
 	}
 	if a.Secret != "" {
 		if s.Box == nil || s.Secrets == nil {
-			return a, fmt.Errorf("runtime secret storage is not configured")
+			return a, fmt.Errorf("%w: CRME_SECRET_KEY is required to store email passwords", ErrValidation)
 		}
 		ciphertext, nonce, err := s.Box.Encrypt(a.Secret, []byte("email_account:password"))
 		if err != nil {
@@ -109,7 +109,7 @@ func (s EmailService) UpdateAccount(ctx context.Context, a domain.EmailAccount) 
 	}
 	if a.Secret != "" {
 		if s.Box == nil || s.Secrets == nil {
-			return a, fmt.Errorf("runtime secret storage is not configured")
+			return a, fmt.Errorf("%w: CRME_SECRET_KEY is required to store email passwords", ErrValidation)
 		}
 		ciphertext, nonce, err := s.Box.Encrypt(a.Secret, []byte("email_account:password"))
 		if err != nil {

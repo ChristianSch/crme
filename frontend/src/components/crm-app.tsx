@@ -757,6 +757,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
   const [busyMemberId, setBusyMemberId] = useState("");
   const [inviting, setInviting] = useState(false);
   const [message, setMessage] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
   const emptyEmailForm = { name: "", email: "", imap_host: "", imap_port: "993", imap_username: "", smtp_host: "", smtp_port: "587", smtp_username: "", secret: "" };
   const [emailForm, setEmailForm] = useState(emptyEmailForm);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -764,7 +765,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
   const [emailTestMessage, setEmailTestMessage] = useState("");
   const [savingEmail, setSavingEmail] = useState(false);
   const [editingEmailAccountId, setEditingEmailAccountId] = useState("");
-  const [editingEmailAccount, setEditingEmailAccount] = useState<EmailAccount | null>(null);
+  const [editingEmailAccount, setEditingEmailAccount] = useState<(EmailAccount & { secret?: string }) | null>(null);
   const canManage = organization?.role === "owner" || organization?.role === "admin";
 
   async function invite(event: FormEvent<HTMLFormElement>) {
@@ -831,6 +832,15 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
     return { ...emailForm, imap_port: Number(emailForm.imap_port) || 993, smtp_port: Number(emailForm.smtp_port) || 587, sync_enabled: true };
   }
 
+  function emailError(err: unknown, fallback: string) {
+    const message = err instanceof Error ? err.message.trim() : "";
+    if (!message) return fallback;
+    if (message === "internal server error" || message.includes("runtime secret storage is not configured")) {
+      return "Email password storage is not configured. Set CRME_SECRET_KEY on the API server and restart it.";
+    }
+    return message.replace(/^validation error:\s*/i, "");
+  }
+
   async function testEmailAccount() {
     setEmailTestState("testing");
     setEmailTestMessage("");
@@ -840,7 +850,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
       setEmailTestMessage("Connection test succeeded.");
     } catch (err) {
       setEmailTestState("error");
-      setEmailTestMessage(err instanceof Error ? err.message : "Connection test failed");
+      setEmailTestMessage(emailError(err, "Connection test failed"));
     }
   }
 
@@ -848,7 +858,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
     event.preventDefault();
     if (emailTestState !== "success") return;
     setSavingEmail(true);
-    setMessage("");
+    setEmailMessage("");
     try {
       await api.createEmailAccount(emailPayload());
       setEmailForm(emptyEmailForm);
@@ -858,7 +868,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
       await onRefresh();
       onToast("Email integration added.");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not save email integration");
+      setEmailMessage(emailError(err, "Could not save email integration"));
     } finally {
       setSavingEmail(false);
     }
@@ -867,6 +877,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
   async function saveEmailAccountEdit(account: EmailAccount) {
     if (!editingEmailAccount) return;
     setBusyMemberId(account.id);
+    setEmailMessage("");
     try {
       await api.updateEmailAccount(account.id, editingEmailAccount);
       setEditingEmailAccountId("");
@@ -874,7 +885,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
       await onRefresh();
       onToast("Email integration updated.");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not update email integration");
+      setEmailMessage(emailError(err, "Could not update email integration"));
     } finally {
       setBusyMemberId("");
     }
@@ -882,11 +893,12 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
 
   async function setEmailSync(account: EmailAccount, syncEnabled: boolean) {
     setBusyMemberId(account.id);
+    setEmailMessage("");
     try {
       await api.updateEmailAccount(account.id, { ...account, sync_enabled: syncEnabled });
       await onRefresh();
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not update email integration");
+      setEmailMessage(emailError(err, "Could not update email integration"));
     } finally {
       setBusyMemberId("");
     }
@@ -894,12 +906,13 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
 
   async function deleteEmailAccount(account: EmailAccount) {
     setBusyMemberId(account.id);
+    setEmailMessage("");
     try {
       await api.deleteEmailAccount(account.id);
       await onRefresh();
       onToast("Email integration removed.");
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Could not remove email integration");
+      setEmailMessage(emailError(err, "Could not remove email integration"));
     } finally {
       setBusyMemberId("");
     }
@@ -972,7 +985,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
         </div>
         <div className="space-y-4">
           <div className="flex justify-end">
-            <Button type="button" className="h-9 rounded-xl" onClick={() => { setEmailForm(emptyEmailForm); setEmailTestState("idle"); setEmailTestMessage(""); setEmailModalOpen(true); }}>Add email integration</Button>
+            <Button type="button" className="h-9 rounded-xl" onClick={() => { setEmailForm(emptyEmailForm); setEmailTestState("idle"); setEmailTestMessage(""); setEmailMessage(""); setEmailModalOpen(true); }}>Add email integration</Button>
           </div>
           <div className="overflow-hidden rounded-xl border">
             {emailAccounts.length === 0 ? <div className="p-4 text-sm text-muted-foreground">No email integrations yet.</div> : (
@@ -991,19 +1004,20 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
                             <Input value={editingEmailAccount.imap_username || ""} onChange={(event) => setEditingEmailAccount({ ...editingEmailAccount, imap_username: event.target.value })} className="h-9 rounded-xl bg-background" aria-label="IMAP username" placeholder="IMAP username" />
                             <Input value={editingEmailAccount.smtp_host || ""} onChange={(event) => setEditingEmailAccount({ ...editingEmailAccount, smtp_host: event.target.value })} className="h-9 rounded-xl bg-background" aria-label="SMTP host" placeholder="SMTP host" />
                             <Input value={editingEmailAccount.smtp_username || ""} onChange={(event) => setEditingEmailAccount({ ...editingEmailAccount, smtp_username: event.target.value })} className="h-9 rounded-xl bg-background" aria-label="SMTP username" placeholder="SMTP username" />
-                            <div className="flex gap-2 md:col-span-2">
+                            <Input value={editingEmailAccount.secret || ""} onChange={(event) => setEditingEmailAccount({ ...editingEmailAccount, secret: event.target.value })} type="password" className="h-9 rounded-xl bg-background md:col-span-2" aria-label="App password" placeholder="New app password, optional" />
+                            {emailMessage && <p className="text-sm text-destructive md:col-span-2">{emailMessage}</p>}
+                            <div className="flex gap-2 pb-2 md:col-span-2">
                               <Button type="button" className="h-9 rounded-xl" disabled={busyMemberId === account.id} onClick={() => saveEmailAccountEdit(account)}>{busyMemberId === account.id ? "Testing..." : "Test & save"}</Button>
                               <Button type="button" variant="outline" className="h-9 rounded-xl bg-background" onClick={() => { setEditingEmailAccountId(""); setEditingEmailAccount(null); }}>Cancel</Button>
                             </div>
                           </div>
                         ) : (
-                          <button type="button" className="truncate text-left text-sm font-medium underline-offset-4 hover:underline" onClick={() => { setEditingEmailAccountId(account.id); setEditingEmailAccount(account); }}>
-                            {account.name || "Untitled integration"}
-                          </button>
+                          <div className="truncate text-sm font-medium">{account.name || "Untitled integration"}</div>
                         )}
-                        <div className="text-xs text-muted-foreground">{account.email} · {account.sync_enabled ? "Sync enabled" : "Sync disabled"}{account.last_synced_at ? ` · Last sync ${lastSyncLabel(account.last_synced_at)}` : ""}</div>
+                        <div className="mt-1 text-xs text-muted-foreground">{account.email} · {account.sync_enabled ? "Sync enabled" : "Sync disabled"}{account.last_synced_at ? ` · Last sync ${lastSyncLabel(account.last_synced_at)}` : ""}</div>
                       </div>
                       <div className="flex items-center gap-2">
+                        {!editingName && <Button type="button" variant="outline" className="h-9 rounded-xl bg-background" disabled={busyMemberId === account.id} onClick={() => { setEmailMessage(""); setEditingEmailAccountId(account.id); setEditingEmailAccount(account); }}>Edit</Button>}
                         <Button type="button" variant="outline" className="h-9 rounded-xl bg-background" disabled={busyMemberId === account.id} onClick={() => setEmailSync(account, !account.sync_enabled)}>{account.sync_enabled ? "Disable" : "Enable"}</Button>
                         <ConfirmAction trigger={<Button type="button" variant="outline" className="h-9 rounded-xl bg-background" disabled={busyMemberId === account.id}>Remove</Button>} title="Remove email integration?" description={`${account.email} will stop syncing.`} actionLabel="Remove" onConfirm={() => deleteEmailAccount(account)} />
                       </div>
@@ -1082,6 +1096,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
             <LabeledInput label="SMTP username" value={emailForm.smtp_username} onChange={(value) => setEmailForm({ ...emailForm, smtp_username: value })} placeholder="you@example.com" />
             <LabeledInput label="App password" value={emailForm.secret} onChange={(value) => { setEmailForm({ ...emailForm, secret: value }); setEmailTestState("idle"); }} type="password" required />
             {emailTestMessage && <p className={cn("text-sm", emailTestState === "success" ? "text-emerald-600" : "text-destructive")}>{emailTestMessage}</p>}
+            {emailMessage && <p className="text-sm text-destructive">{emailMessage}</p>}
             <div className="mt-2 flex justify-end gap-2">
               <Button type="button" variant="outline" className="h-9 rounded-xl bg-background" disabled={emailTestState === "testing"} onClick={testEmailAccount}>{emailTestState === "testing" ? "Testing..." : "Test connection"}</Button>
               <Button type="submit" className="h-9 rounded-xl" disabled={savingEmail || emailTestState !== "success"}>{savingEmail ? "Saving..." : "Save"}</Button>

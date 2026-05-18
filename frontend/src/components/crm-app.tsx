@@ -1076,28 +1076,30 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
       </section>
 
       <Sheet open={emailModalOpen} onOpenChange={setEmailModalOpen}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle>Add email integration</SheetTitle>
-            <SheetDescription>Test the IMAP connection before saving. The account cannot be saved until the test succeeds.</SheetDescription>
-          </SheetHeader>
-          <form className="mt-5 grid gap-3" onSubmit={saveEmailAccount}>
-            <LabeledInput label="Name" value={emailForm.name} onChange={(value) => { setEmailForm({ ...emailForm, name: value }); setEmailTestState("idle"); }} placeholder="Work" />
-            <LabeledInput label="Email address" value={emailForm.email} onChange={(value) => { setEmailForm({ ...emailForm, email: value }); setEmailTestState("idle"); }} type="email" required placeholder="you@example.com" />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <LabeledInput label="IMAP host" value={emailForm.imap_host} onChange={(value) => { setEmailForm({ ...emailForm, imap_host: value }); setEmailTestState("idle"); }} required placeholder="imap.example.com" />
-              <LabeledInput label="IMAP port" value={emailForm.imap_port} onChange={(value) => { setEmailForm({ ...emailForm, imap_port: value }); setEmailTestState("idle"); }} inputMode="numeric" />
+        <SheetContent className="w-full overflow-hidden p-0 sm:max-w-xl">
+          <form className="flex h-full flex-col bg-[oklch(0.985_0.004_255)]" onSubmit={saveEmailAccount}>
+            <SheetHeader className="border-b py-6 pl-6 pr-16 text-left">
+              <SheetTitle className="text-xl tracking-[-0.025em]">Add email integration</SheetTitle>
+              <SheetDescription>Test the IMAP connection before saving. The account cannot be saved until the test succeeds.</SheetDescription>
+            </SheetHeader>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-6 py-6">
+              <LabeledInput label="Name" value={emailForm.name} onChange={(value) => { setEmailForm({ ...emailForm, name: value }); setEmailTestState("idle"); }} placeholder="Work" />
+              <LabeledInput label="Email address" value={emailForm.email} onChange={(value) => { setEmailForm({ ...emailForm, email: value }); setEmailTestState("idle"); }} type="email" required placeholder="you@example.com" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <LabeledInput label="IMAP host" value={emailForm.imap_host} onChange={(value) => { setEmailForm({ ...emailForm, imap_host: value }); setEmailTestState("idle"); }} required placeholder="imap.example.com" />
+                <LabeledInput label="IMAP port" value={emailForm.imap_port} onChange={(value) => { setEmailForm({ ...emailForm, imap_port: value }); setEmailTestState("idle"); }} inputMode="numeric" />
+              </div>
+              <LabeledInput label="IMAP username" value={emailForm.imap_username} onChange={(value) => { setEmailForm({ ...emailForm, imap_username: value }); setEmailTestState("idle"); }} placeholder="you@example.com" />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <LabeledInput label="SMTP host" value={emailForm.smtp_host} onChange={(value) => setEmailForm({ ...emailForm, smtp_host: value })} placeholder="smtp.example.com" />
+                <LabeledInput label="SMTP port" value={emailForm.smtp_port} onChange={(value) => setEmailForm({ ...emailForm, smtp_port: value })} inputMode="numeric" />
+              </div>
+              <LabeledInput label="SMTP username" value={emailForm.smtp_username} onChange={(value) => setEmailForm({ ...emailForm, smtp_username: value })} placeholder="you@example.com" />
+              <LabeledInput label="App password" value={emailForm.secret} onChange={(value) => { setEmailForm({ ...emailForm, secret: value }); setEmailTestState("idle"); }} type="password" required />
+              {emailTestMessage && <p className={cn("text-sm", emailTestState === "success" ? "text-emerald-600" : "text-destructive")}>{emailTestMessage}</p>}
+              {emailMessage && <p className="text-sm text-destructive">{emailMessage}</p>}
             </div>
-            <LabeledInput label="IMAP username" value={emailForm.imap_username} onChange={(value) => { setEmailForm({ ...emailForm, imap_username: value }); setEmailTestState("idle"); }} placeholder="you@example.com" />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <LabeledInput label="SMTP host" value={emailForm.smtp_host} onChange={(value) => setEmailForm({ ...emailForm, smtp_host: value })} placeholder="smtp.example.com" />
-              <LabeledInput label="SMTP port" value={emailForm.smtp_port} onChange={(value) => setEmailForm({ ...emailForm, smtp_port: value })} inputMode="numeric" />
-            </div>
-            <LabeledInput label="SMTP username" value={emailForm.smtp_username} onChange={(value) => setEmailForm({ ...emailForm, smtp_username: value })} placeholder="you@example.com" />
-            <LabeledInput label="App password" value={emailForm.secret} onChange={(value) => { setEmailForm({ ...emailForm, secret: value }); setEmailTestState("idle"); }} type="password" required />
-            {emailTestMessage && <p className={cn("text-sm", emailTestState === "success" ? "text-emerald-600" : "text-destructive")}>{emailTestMessage}</p>}
-            {emailMessage && <p className="text-sm text-destructive">{emailMessage}</p>}
-            <div className="mt-2 flex justify-end gap-2">
+            <div className="flex justify-end gap-2 border-t bg-background px-6 py-4">
               <Button type="button" variant="outline" className="h-9 rounded-xl bg-background" disabled={emailTestState === "testing"} onClick={testEmailAccount}>{emailTestState === "testing" ? "Testing..." : "Test connection"}</Button>
               <Button type="submit" className="h-9 rounded-xl" disabled={savingEmail || emailTestState !== "success"}>{savingEmail ? "Saving..." : "Save"}</Button>
             </div>

@@ -1,0 +1,23 @@
+.git
+.DS_Store
+.env
+.env.*
+.envrc
+backups/
+data/
+
+# local/build output
+bin/
+*.test
+*.dump
+
+# frontend/extension dependencies and build output
+node_modules/
+.next/
+.output/
+dist/
+frontend/node_modules/
+frontend/.next/
+extension/node_modules/
+extension/.output/
+extension/dist/

@@ -1,0 +1,25 @@
+# OS/editor noise
+.DS_Store
+*.tsbuildinfo
+
+# local data/imports
+/data/
+*.dump
+
+# local env/secrets
+.env*
+.envrc
+
+# build artifacts
+/bin/
+*.test
+
+# local deploy config
+fly*.toml
+!fly.*.example.toml
+
+# JS deps/build output
+node_modules/
+.next/
+.output/
+dist/

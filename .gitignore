@@ -13,6 +13,8 @@
 # build artifacts
 /bin/
 *.test
+cli
+server
 
 # local deploy config
 fly*.toml

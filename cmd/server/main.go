@@ -74,6 +74,7 @@ func main() {
 		Suggestions:           usecase.SuggestionService{UOW: store, Prompts: store, People: store, Companies: store, Relationships: store, Activities: store, Emails: store},
 		Email:                 emailService,
 		Audit:                 usecase.AuditService{Store: store},
+		Admin:                 usecase.AdminService{Store: store},
 	}
 	if cfg.EmailSyncInterval != "" {
 		interval, err := time.ParseDuration(cfg.EmailSyncInterval)

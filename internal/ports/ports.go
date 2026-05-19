@@ -50,6 +50,10 @@ type AuditLogStore interface {
 	ListAuditLogs(ctx context.Context, organizationID domain.ID, limit, offset int) ([]domain.AuditLog, error)
 }
 
+type AdminStore interface {
+	AdminStats(ctx context.Context, organizationID domain.ID) (domain.AdminStats, error)
+}
+
 type MailFetcher interface {
 	FetchNewMessages(ctx context.Context, account domain.EmailAccount, secret string, since time.Time, limit int) ([]domain.EmailMessage, error)
 }

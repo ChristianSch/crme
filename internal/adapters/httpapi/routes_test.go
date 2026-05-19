@@ -92,6 +92,12 @@ func (s *routeAuthStoreFake) AcceptOrganizationInvitation(ctx context.Context, t
 	return domain.OrganizationInvitation{ID: "invite-1", OrganizationID: "org-1", OrganizationName: "Test Org", Email: "user@example.com", Role: "member", ExpiresAt: now.Add(time.Hour), AcceptedAt: &now}, nil
 }
 
+type routeAdminStoreFake struct{}
+
+func (s *routeAdminStoreFake) AdminStats(ctx context.Context, organizationID domain.ID) (domain.AdminStats, error) {
+	return domain.AdminStats{Users: 2, People: 3, OpenTasks: 1}, nil
+}
+
 type routePersonStoreFake struct {
 	person  domain.Person
 	updated domain.Person
@@ -129,6 +135,7 @@ func routeAPI(auth *routeAuthStoreFake, people *routePersonStoreFake) API {
 		Auth:           usecase.AuthService{Store: auth, Organizations: auth, Secret: "secret"},
 		AllowedOrigins: []string{"http://localhost"},
 		CRM:            usecase.CRMService{People: people},
+		Admin:          usecase.AdminService{Store: &routeAdminStoreFake{}},
 	}
 }
 
@@ -233,5 +240,30 @@ func TestMemberCannotManageOrganizationMembers(t *testing.T) {
 
 	if res.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d: %s", res.Code, res.Body.String())
+	}
+}
+
+func TestAdminStatsRequiresAdminRole(t *testing.T) {
+	api := routeAPI(&routeAuthStoreFake{role: "member"}, &routePersonStoreFake{})
+	res := httptest.NewRecorder()
+
+	api.Handler().ServeHTTP(res, authedJSONRequest(http.MethodGet, "/admin/stats", ""))
+
+	if res.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", res.Code, res.Body.String())
+	}
+}
+
+func TestAdminStatsReturnsCounts(t *testing.T) {
+	api := routeAPI(&routeAuthStoreFake{role: "admin"}, &routePersonStoreFake{})
+	res := httptest.NewRecorder()
+
+	api.Handler().ServeHTTP(res, authedJSONRequest(http.MethodGet, "/admin/stats", ""))
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
+	}
+	if !strings.Contains(res.Body.String(), `"users":2`) || !strings.Contains(res.Body.String(), `"open_tasks":1`) {
+		t.Fatalf("expected stats response, got %s", res.Body.String())
 	}
 }

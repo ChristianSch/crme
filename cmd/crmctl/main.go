@@ -27,6 +27,14 @@ func main() {
 	client := &http.Client{Timeout: 30 * time.Second}
 	cmd := os.Args[1]
 	args, jsonOut := parseGlobalArgs(os.Args[2:])
+	if cmd == "admin" {
+		if len(args) == 0 {
+			usage()
+			os.Exit(2)
+		}
+		cmd = "admin " + args[0]
+		args = args[1:]
+	}
 	if cmd == "auth" {
 		runAuth(args)
 		return
@@ -190,6 +198,8 @@ func main() {
 		method, path, body = http.MethodPost, "/ai/prompts/resolve", suggestionSuppressBody(args)
 	case "audit-logs":
 		method, path = http.MethodGet, "/audit-logs"+query(args)
+	case "admin stats", "admin-stats":
+		method, path = http.MethodGet, "/admin/stats"+query(args)
 	default:
 		usage()
 		os.Exit(2)
@@ -290,6 +300,9 @@ Common examples:
   crmctl email-sync limit=50 --json
     Run an on-demand email sync for the authenticated user's configured accounts.
 
+  crmctl admin stats --json
+    Show organization-level admin counts for owners and admins.
+
 Auth commands:
   auth set --api <url> <api-token>
   auth show
@@ -327,6 +340,9 @@ Read commands:
   assistant-conversations
   suggestions [status=open]
   audit-logs [limit=... offset=...]
+
+Admin commands:
+  admin stats
 
 Mutating commands:
   magic-link email=you@example.com
@@ -809,7 +825,7 @@ func columnsFor(cmd string) []string {
 }
 
 func preferredObjectKeys(obj map[string]any) []string {
-	preferred := []string{"id", "workspace_id", "session_id", "status", "first_name", "last_name", "name", "description", "email", "phone", "title", "linkedin_url", "body", "due_at", "city", "stage", "value_cents", "currency", "domain", "created_at", "updated_at"}
+	preferred := []string{"id", "workspace_id", "session_id", "status", "users", "organizations", "workspaces", "people", "companies", "deals", "open_tasks", "tags", "activities", "email_accounts", "open_suggestions", "audit_logs", "first_name", "last_name", "name", "description", "email", "phone", "title", "linkedin_url", "body", "due_at", "city", "stage", "value_cents", "currency", "domain", "created_at", "updated_at"}
 	seen := map[string]bool{}
 	out := []string{}
 	for _, k := range preferred {

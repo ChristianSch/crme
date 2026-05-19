@@ -34,6 +34,7 @@ type API struct {
 	Suggestions           usecase.SuggestionService
 	Email                 usecase.EmailService
 	Audit                 usecase.AuditService
+	Admin                 usecase.AdminService
 }
 
 func (a API) Handler() http.Handler {
@@ -125,6 +126,7 @@ func (a API) Handler() http.Handler {
 	mux.HandleFunc("DELETE /email/accounts/{id}", a.deleteEmailAccount)
 	mux.HandleFunc("POST /email/sync", a.syncEmail)
 	mux.HandleFunc("GET /audit-logs", a.listAuditLogs)
+	mux.HandleFunc("GET /admin/stats", a.adminStats)
 	return a.loggingMiddleware(a.securityMiddleware(a.authMiddleware(mux)))
 }
 
@@ -1581,11 +1583,24 @@ func (a API) syncEmail(w http.ResponseWriter, r *http.Request) {
 }
 func (a API) listAuditLogs(w http.ResponseWriter, r *http.Request) {
 	access, ok := authctx.AccessFrom(r.Context())
-	if !ok {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	if !ok || access.OrganizationID == "" {
+		err(w, usecase.ErrUnauthorized)
 		return
 	}
 	out, e := a.Audit.ListAuditLogs(r.Context(), access.Role, access.OrganizationID, limit(r), offset(r))
+	if err(w, e) {
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a API) adminStats(w http.ResponseWriter, r *http.Request) {
+	access, ok := authctx.AccessFrom(r.Context())
+	if !ok || access.OrganizationID == "" {
+		err(w, usecase.ErrUnauthorized)
+		return
+	}
+	out, e := a.Admin.Stats(r.Context(), access.Role, access.OrganizationID)
 	if err(w, e) {
 		return
 	}

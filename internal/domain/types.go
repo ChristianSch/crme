@@ -91,6 +91,21 @@ type Me struct {
 	Capabilities          Capabilities             `json:"capabilities"`
 }
 
+type AdminStats struct {
+	Users           int `json:"users"`
+	Organizations   int `json:"organizations"`
+	Workspaces      int `json:"workspaces"`
+	People          int `json:"people"`
+	Companies       int `json:"companies"`
+	Deals           int `json:"deals"`
+	OpenTasks       int `json:"open_tasks"`
+	Tags            int `json:"tags"`
+	Activities      int `json:"activities"`
+	EmailAccounts   int `json:"email_accounts"`
+	OpenSuggestions int `json:"open_suggestions"`
+	AuditLogs       int `json:"audit_logs"`
+}
+
 const (
 	EntityPerson   EntityType = "person"
 	EntityCompany  EntityType = "company"

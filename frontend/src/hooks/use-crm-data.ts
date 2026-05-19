@@ -31,6 +31,7 @@ export function useCrmData() {
   const [companiesPage, setCompaniesPage] = useState<PageState>(initialPageState);
   const [tasksPage, setTasksPage] = useState<PageState>(initialPageState);
   const [dealsPage, setDealsPage] = useState<PageState>(initialPageState);
+  const [suggestionsPage, setSuggestionsPage] = useState<PageState>(initialPageState);
 
   const setLoadError = useCallback((error: unknown) => {
     const message = error instanceof Error ? error.message : "";
@@ -86,6 +87,18 @@ export function useCrmData() {
     }
   }, [setLoadError]);
 
+  const loadSuggestions = useCallback(async (page = 0) => {
+    setSuggestionsPage((current) => ({ ...current, page, loading: true }));
+    try {
+      const next = await api.suggestions("open", PAGE_SIZE, page * PAGE_SIZE);
+      setSuggestions(next ?? []);
+      setSuggestionsPage({ page, loading: false, hasNext: next.length === PAGE_SIZE });
+    } catch (error) {
+      setSuggestionsPage((current) => ({ ...current, loading: false }));
+      setLoadError(error);
+    }
+  }, [setLoadError]);
+
   const loadData = useCallback(async (organizationIdOverride = "") => {
     setState("loading");
     try {
@@ -107,7 +120,7 @@ export function useCrmData() {
         api.companies("", "", PAGE_SIZE, 0),
         api.tasks({ limit: PAGE_SIZE, offset: 0 }),
         api.deals("", "", PAGE_SIZE, 0),
-        api.suggestions(),
+        api.suggestions("open", PAGE_SIZE, 0),
       ]);
       setWorkspaces(workspaceData ?? []);
       setPeople(peopleData ?? []);
@@ -119,6 +132,7 @@ export function useCrmData() {
       setCompaniesPage({ page: 0, loading: false, hasNext: (companyData ?? []).length === PAGE_SIZE });
       setTasksPage({ page: 0, loading: false, hasNext: (taskData ?? []).length === PAGE_SIZE });
       setDealsPage({ page: 0, loading: false, hasNext: (dealData ?? []).length === PAGE_SIZE });
+      setSuggestionsPage({ page: 0, loading: false, hasNext: (suggestionData ?? []).length === PAGE_SIZE });
       setState("ready");
     } catch (error) {
       setLoadError(error);
@@ -148,10 +162,12 @@ export function useCrmData() {
     companiesPage,
     tasksPage,
     dealsPage,
+    suggestionsPage,
     loadPeople,
     loadCompanies,
     loadTasks,
     loadDeals,
+    loadSuggestions,
     setPeople,
     setCompanies,
     setTasks,

@@ -66,7 +66,7 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
   const [taskDueFilter, setTaskDueFilter] = useState<"today" | "overdue" | "upcoming" | "none" | "all">("all");
   const [workspaceId, setWorkspaceIdState] = useState<string>(initialWorkspaceId);
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(initialSidebarCollapsed);
-  const { state, loadData, me, organizations, selectedOrganizationId, workspaces, people, companies, tasks, deals, suggestions, peoplePage, companiesPage, tasksPage, dealsPage, loadPeople, loadCompanies, loadTasks, loadDeals, setTasks } = useCrmData();
+  const { state, loadData, me, organizations, selectedOrganizationId, workspaces, people, companies, tasks, deals, suggestions, peoplePage, companiesPage, tasksPage, dealsPage, suggestionsPage, loadPeople, loadCompanies, loadTasks, loadDeals, loadSuggestions, setTasks } = useCrmData();
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedTask, setSelectedTask] = useState<Todo | null>(null);
@@ -453,7 +453,9 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
                 <TasksTable tasks={filteredTasks} people={people} companies={companies} deals={deals} onSelect={setSelectedTask} onSelectPerson={openPerson} onSelectCompany={openCompany} onSelectDeal={openDeal} />
               </PagedTable>
             ) : view === "suggestions" ? (
-              <SuggestionsPanel suggestions={filteredSuggestions} people={people} companies={companies} onChanged={loadData} onUndo={setUndo} />
+              <PagedTable page={suggestionsPage.page} hasNext={suggestionsPage.hasNext} loading={suggestionsPage.loading} onPageChange={loadSuggestions}>
+                <SuggestionsPanel suggestions={filteredSuggestions} people={people} companies={companies} onChanged={() => loadSuggestions(suggestionsPage.page)} onUndo={setUndo} />
+              </PagedTable>
             ) : (
               <DashboardPanel tasks={filteredTasks} suggestions={suggestions} people={people} companies={companies} deals={deals} onSelectTask={setSelectedTask} onSelectPerson={openPerson} onSelectCompany={openCompany} onSelectDeal={openDeal} onOpenTasks={() => router.push("/tasks")} onOpenSuggestions={() => router.push("/suggestions")} />
             )}

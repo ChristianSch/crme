@@ -1267,7 +1267,7 @@ func (a API) dashboard(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 func (a API) listAIPrompts(w http.ResponseWriter, r *http.Request) {
-	out, e := a.Suggestions.ListPrompts(r.Context(), r.URL.Query().Get("status"), limit(r))
+	out, e := a.Suggestions.ListPrompts(r.Context(), r.URL.Query().Get("status"), limit(r), offset(r))
 	if err(w, e) {
 		return
 	}

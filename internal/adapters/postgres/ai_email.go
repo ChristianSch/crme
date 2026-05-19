@@ -45,8 +45,8 @@ func (s *Store) UnsuppressSuggestion(ctx context.Context, kind domain.AIPromptKi
 	return err
 }
 
-func (s *Store) ListAIPrompts(ctx context.Context, status string, limit int) ([]domain.AIPrompt, error) {
-	rows, err := s.query(ctx, `select id, kind, entity_type, coalesce(entity_id::text,''), target_type, target_identifier, title, body, status, last_touch_at, created_at from ai_prompts where $1='' or status=$1 order by coalesce(last_touch_at, created_at) desc limit $2`, status, limit)
+func (s *Store) ListAIPrompts(ctx context.Context, status string, limit, offset int) ([]domain.AIPrompt, error) {
+	rows, err := s.query(ctx, `select id, kind, entity_type, coalesce(entity_id::text,''), target_type, target_identifier, title, body, status, last_touch_at, created_at from ai_prompts where $1='' or status=$1 order by coalesce(last_touch_at, created_at) desc, id desc limit $2 offset $3`, status, limit, offset)
 	if err != nil {
 		return nil, err
 	}

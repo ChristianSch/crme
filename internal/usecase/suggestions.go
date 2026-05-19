@@ -57,8 +57,8 @@ func (s SuggestionService) emailService() EmailService {
 	return EmailService{Messages: s.Emails}
 }
 
-func (s SuggestionService) ListPrompts(ctx context.Context, status string, limit int) ([]domain.AIPrompt, error) {
-	return s.Prompts.ListAIPrompts(ctx, status, saneLimit(limit))
+func (s SuggestionService) ListPrompts(ctx context.Context, status string, limit, offset int) ([]domain.AIPrompt, error) {
+	return s.Prompts.ListAIPrompts(ctx, status, saneLimit(limit), max(offset, 0))
 }
 
 func (s SuggestionService) CreatePrompt(ctx context.Context, prompt domain.AIPrompt) (domain.AIPrompt, error) {

@@ -31,7 +31,7 @@ func (aiPromptStoreFake) SuppressSuggestion(ctx context.Context, kind domain.AIP
 func (aiPromptStoreFake) UnsuppressSuggestion(ctx context.Context, kind domain.AIPromptKind, targetType string, targetIdentifier string) error {
 	return nil
 }
-func (aiPromptStoreFake) ListAIPrompts(ctx context.Context, status string, limit int) ([]domain.AIPrompt, error) {
+func (aiPromptStoreFake) ListAIPrompts(ctx context.Context, status string, limit, offset int) ([]domain.AIPrompt, error) {
 	return nil, nil
 }
 func (aiPromptStoreFake) ResolveAIPrompt(ctx context.Context, id domain.ID, status string) (domain.AIPrompt, error) {

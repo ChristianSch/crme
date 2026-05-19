@@ -53,8 +53,41 @@ export function SuggestionsPanel({
   onUndo: (undo: SuggestionUndo | null) => void;
 }) {
   const [busyId, setBusyId] = useState<string>("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedPeople, setSelectedPeople] = useState<Record<string, string>>({});
   const [selectedCompanies, setSelectedCompanies] = useState<Record<string, string>>({});
+
+  const selectedSuggestions = suggestions.filter((suggestion) => selectedIds.includes(suggestion.id));
+  const allSelected = suggestions.length > 0 && suggestions.every((suggestion) => selectedIds.includes(suggestion.id));
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => current.includes(id) ? current.filter((selectedId) => selectedId !== id) : [...current, id]);
+  }
+
+  function toggleAllSelected() {
+    setSelectedIds(allSelected ? [] : suggestions.map((suggestion) => suggestion.id));
+  }
+
+  async function batchAct(action: "accept" | "dismiss" | "suppress") {
+    if (!selectedSuggestions.length) return;
+    setBusyId("batch");
+    try {
+      for (const suggestion of selectedSuggestions) {
+        if (action === "accept") {
+          await api.acceptSuggestion(suggestion.id);
+        } else if (action === "suppress") {
+          await api.suppressSuggestion(suggestion.id);
+        } else {
+          await api.dismissSuggestion(suggestion.id);
+        }
+      }
+      setSelectedIds([]);
+      onUndo(null);
+      await onChanged();
+    } finally {
+      setBusyId("");
+    }
+  }
 
   async function act(suggestion: Suggestion, action: "accept" | "dismiss" | "suppress") {
     setBusyId(suggestion.id);
@@ -113,18 +146,38 @@ export function SuggestionsPanel({
         <div className="flex items-center gap-2 font-medium tracking-[-0.02em]"><Sparkles className="size-4" /> Agent note</div>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">These are prepared changes. Review each suggestion, link it to an existing record when needed, then approve only what should become part of your crm.</p>
       </div>
+      <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input type="checkbox" className="size-4 rounded border-border" checked={allSelected} onChange={toggleAllSelected} disabled={busyId === "batch"} />
+          {selectedSuggestions.length ? `${selectedSuggestions.length} selected` : "Select suggestions"}
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" className="h-8 rounded-xl" disabled={busyId === "batch" || !selectedSuggestions.length} onClick={() => batchAct("accept")}>Approve selected</Button>
+          <Button size="sm" variant="outline" className="h-8 rounded-xl bg-background" disabled={busyId === "batch" || !selectedSuggestions.length} onClick={() => batchAct("dismiss")}>Dismiss selected</Button>
+          <ConfirmAction
+            title="Never ask again for selected suggestions?"
+            description="This suppresses future suggestions like the selected items. Use it only when these prompts are not useful for your CRM."
+            actionLabel="Never ask again"
+            onConfirm={() => batchAct("suppress")}
+            trigger={<Button size="sm" variant="outline" className="h-8 rounded-xl bg-background" disabled={busyId === "batch" || !selectedSuggestions.length}>Never ask again</Button>}
+          />
+        </div>
+      </div>
       <div className="space-y-3">
         {suggestions.map((suggestion) => (
           <div key={suggestion.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm transition-shadow hover:shadow-[0_12px_34px_oklch(0.45_0.012_255_/_0.10)] sm:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 flex-1">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <StatusBadge value={suggestion.kind.replaceAll("_", " ")} tone="blue" />
-                  <span className="text-xs text-muted-foreground">Ready for review</span>
-                  <span className="text-xs text-muted-foreground">Last touch {relativeDate(suggestion.last_touch_at ?? suggestion.created_at)}</span>
+              <div className="flex min-w-0 flex-1 gap-3">
+                <input type="checkbox" className="mt-1 size-4 shrink-0 rounded border-border" checked={selectedIds.includes(suggestion.id)} onChange={() => toggleSelected(suggestion.id)} disabled={busyId === "batch"} aria-label={`Select ${suggestion.title}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="mb-3 flex flex-wrap items-center gap-2">
+                    <StatusBadge value={suggestion.kind.replaceAll("_", " ")} tone="blue" />
+                    <span className="text-xs text-muted-foreground">Ready for review</span>
+                    <span className="text-xs text-muted-foreground">Last touch {relativeDate(suggestion.last_touch_at ?? suggestion.created_at)}</span>
+                  </div>
+                  <h3 className="text-base font-medium tracking-[-0.02em]">{suggestion.title}</h3>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{suggestionCardBody(suggestion)}</p>
                 </div>
-                <h3 className="text-base font-medium tracking-[-0.02em]">{suggestion.title}</h3>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{suggestionCardBody(suggestion)}</p>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2 lg:justify-end">
                 {suggestion.kind === "new_contact" && (
@@ -134,7 +187,7 @@ export function SuggestionsPanel({
                     value={selectedPeople[suggestion.id] || suggestedPeopleForSuggestion(suggestion, people)[0]?.id || ""}
                     onChange={(personId) => setSelectedPeople((current) => ({ ...current, [suggestion.id]: personId }))}
                     onLink={() => linkToExistingPerson(suggestion)}
-                    disabled={busyId === suggestion.id}
+                    disabled={busyId === suggestion.id || busyId === "batch"}
                   />
                 )}
                 {suggestion.kind === "new_company" && (
@@ -144,13 +197,13 @@ export function SuggestionsPanel({
                     value={selectedCompanies[suggestion.id] || suggestedCompaniesForSuggestion(suggestion, companies)[0]?.id || ""}
                     onChange={(companyId) => setSelectedCompanies((current) => ({ ...current, [suggestion.id]: companyId }))}
                     onLink={() => linkToExistingCompany(suggestion)}
-                    disabled={busyId === suggestion.id}
+                    disabled={busyId === suggestion.id || busyId === "batch"}
                   />
                 )}
-                <Button size="sm" className="h-8 rounded-xl" disabled={busyId === suggestion.id} onClick={() => act(suggestion, "accept")}><Check className="size-3.5" /> {suggestion.kind === "new_contact" ? "Create contact" : suggestion.kind === "new_company" ? "Create company" : "Approve"}</Button>
+                <Button size="sm" className="h-8 rounded-xl" disabled={busyId === suggestion.id || busyId === "batch"} onClick={() => act(suggestion, "accept")}><Check className="size-3.5" /> {suggestion.kind === "new_contact" ? "Create contact" : suggestion.kind === "new_company" ? "Create company" : "Approve"}</Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button size="icon-sm" variant="outline" className="h-8 w-8 rounded-xl bg-background" disabled={busyId === suggestion.id} aria-label="Suggestion actions"><MoreHorizontal className="size-4" /></Button>
+                    <Button size="icon-sm" variant="outline" className="h-8 w-8 rounded-xl bg-background" disabled={busyId === suggestion.id || busyId === "batch"} aria-label="Suggestion actions"><MoreHorizontal className="size-4" /></Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48 rounded-xl">
                     <DropdownMenuItem onClick={() => act(suggestion, "dismiss")}>Dismiss for now</DropdownMenuItem>

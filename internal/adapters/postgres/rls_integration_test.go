@@ -188,7 +188,7 @@ func TestRLSOrganizationIsolationAndPrivateEmail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create ai prompt: %v", err)
 	}
-	prompts, err := store.ListAIPrompts(owner2Ctx, "open", 50)
+	prompts, err := store.ListAIPrompts(owner2Ctx, "open", 50, 0)
 	if err != nil {
 		t.Fatalf("other org list prompts: %v", err)
 	}

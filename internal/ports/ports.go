@@ -172,7 +172,7 @@ type AIPromptStore interface {
 	IsSuggestionSuppressed(ctx context.Context, kind domain.AIPromptKind, targetType string, targetIdentifier string) (bool, error)
 	SuppressSuggestion(ctx context.Context, kind domain.AIPromptKind, targetType string, targetIdentifier string, reason string) error
 	UnsuppressSuggestion(ctx context.Context, kind domain.AIPromptKind, targetType string, targetIdentifier string) error
-	ListAIPrompts(ctx context.Context, status string, limit int) ([]domain.AIPrompt, error)
+	ListAIPrompts(ctx context.Context, status string, limit, offset int) ([]domain.AIPrompt, error)
 	ResolveAIPrompt(ctx context.Context, id domain.ID, status string) (domain.AIPrompt, error)
 }
 

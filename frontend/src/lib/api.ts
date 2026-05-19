@@ -499,8 +499,8 @@ export const api = {
   deleteTask(id: ID) {
     return request<{ status: string }>(`/tasks/${id}`, { method: "DELETE" });
   },
-  suggestions(status = "open") {
-    const params = new URLSearchParams({ limit: "200" });
+  suggestions(status = "open", limit = 50, offset = 0) {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
     if (status) params.set("status", status);
     return request<Suggestion[]>(`/ai/prompts?${params}`);
   },

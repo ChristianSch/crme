@@ -407,7 +407,7 @@ func (s AIService) runAssistantReadTool(ctx context.Context, tool string, args m
 		if s.Prompts == nil {
 			return nil, fmt.Errorf("suggestions are unavailable")
 		}
-		return s.Prompts.ListAIPrompts(ctx, argString(args, "status"), limit)
+		return s.Prompts.ListAIPrompts(ctx, argString(args, "status"), limit, 0)
 	case "crm.email_messages":
 		if s.Emails == nil {
 			return nil, fmt.Errorf("email messages are unavailable")

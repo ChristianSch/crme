@@ -978,15 +978,15 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
 
       <section className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)] lg:p-6">
         <div>
-          <h2 className="text-sm font-semibold">Command line access</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Create personal tokens for crmctl and automation.</p>
+          <h2 className="text-sm font-semibold">API tokens</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Create personal tokens for crmctl or other API clients.</p>
         </div>
         <div className="space-y-4">
           <div className="flex justify-end">
-            <Button type="button" className="h-9 rounded-xl" onClick={() => { setTokenName("crmctl"); setNewToken(""); setTokenMessage(""); setTokenSheetOpen(true); }}>Create token</Button>
+            <Button type="button" className="h-9 rounded-xl" onClick={() => { setTokenName("crmctl"); setNewToken(""); setTokenMessage(""); setTokenSheetOpen(true); }}>Create API token</Button>
           </div>
           <div className="overflow-hidden rounded-xl border">
-            {apiTokens.length === 0 ? <div className="p-4 text-sm text-muted-foreground">No command line tokens yet.</div> : (
+            {apiTokens.length === 0 ? <div className="p-4 text-sm text-muted-foreground">No API tokens yet.</div> : (
               <div className="divide-y divide-border">
                 {apiTokens.map((token) => (
                   <div key={token.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -994,7 +994,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
                       <div className="truncate text-sm font-medium">{token.name}</div>
                       <div className="text-xs text-muted-foreground">Created {relativeDate(token.created_at)}{token.last_used_at ? ` · Last used ${relativeDate(token.last_used_at)}` : " · Never used"}</div>
                     </div>
-                    <ConfirmAction trigger={<Button type="button" variant="outline" className="h-9 rounded-xl bg-background" disabled={busyMemberId === token.id}>Revoke</Button>} title="Revoke command line token?" description={`${token.name} will stop working for crmctl and automation.`} actionLabel="Revoke" onConfirm={() => revokeApiToken(token)} />
+                    <ConfirmAction trigger={<Button type="button" variant="outline" className="h-9 rounded-xl bg-background" disabled={busyMemberId === token.id}>Revoke</Button>} title="Revoke API token?" description={`${token.name} will stop working for crmctl and other API clients.`} actionLabel="Revoke" onConfirm={() => revokeApiToken(token)} />
                   </div>
                 ))}
               </div>
@@ -1148,25 +1148,25 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
       </section>
 
       <Sheet open={tokenSheetOpen} onOpenChange={setTokenSheetOpen}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle>Create command line token</SheetTitle>
-            <SheetDescription>Name this token so you can recognize it later. The setup command is shown once after creation.</SheetDescription>
+        <SheetContent className="w-full overflow-hidden p-0 sm:max-w-xl">
+          <SheetHeader className="border-b py-6 pl-6 pr-16 text-left">
+            <SheetTitle className="text-xl tracking-[-0.025em]">Create API token</SheetTitle>
+            <SheetDescription>Name this token so you can recognize it later. The crmctl setup command is shown once after creation.</SheetDescription>
           </SheetHeader>
           {newToken ? (
-            <div className="mt-5 space-y-4">
+            <div className="space-y-4 px-6 py-6">
               <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
-                <div className="text-sm font-medium">Setup command</div>
+                <div className="text-sm font-medium">crmctl setup command</div>
                 <p className="mt-1 text-sm text-muted-foreground">Copy this command into your terminal.</p>
                 <code className="mt-3 block break-all rounded-lg border bg-background px-3 py-2 text-sm">crmctl auth set --api {apiEndpointLabel()} {newToken}</code>
               </div>
-              <p className="text-sm text-muted-foreground">The token itself is only shown in that command. If you close this sheet before copying it, revoke this token and create a new one.</p>
+              <p className="text-sm text-muted-foreground">The token is only shown in that command. If you close this sheet before copying it, revoke this token and create a new one.</p>
               <div className="flex justify-end">
                 <Button type="button" className="h-9 rounded-xl" onClick={() => setTokenSheetOpen(false)}>Done</Button>
               </div>
             </div>
           ) : (
-            <form className="mt-5 grid gap-4" onSubmit={createApiToken}>
+            <form className="grid gap-4 px-6 py-6" onSubmit={createApiToken}>
               <LabeledInput label="Token name" value={tokenName} onChange={setTokenName} required placeholder="crmctl on MacBook" />
               {tokenMessage && <p className="text-sm text-destructive">{tokenMessage}</p>}
               <div className="flex justify-end gap-2">

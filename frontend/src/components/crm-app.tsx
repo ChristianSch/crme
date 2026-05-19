@@ -770,6 +770,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
   const [newToken, setNewToken] = useState("");
   const [tokenMessage, setTokenMessage] = useState("");
   const [creatingToken, setCreatingToken] = useState(false);
+  const [tokenSheetOpen, setTokenSheetOpen] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
   const emptyEmailForm = { name: "", email: "", imap_host: "", imap_port: "993", imap_username: "", smtp_host: "", smtp_port: "587", smtp_username: "", secret: "" };
   const [emailForm, setEmailForm] = useState(emptyEmailForm);
@@ -978,26 +979,12 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
       <section className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)] lg:p-6">
         <div>
           <h2 className="text-sm font-semibold">Command line access</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Create a personal token for crmctl. Copy it now; it is shown once.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Create personal tokens for crmctl and automation.</p>
         </div>
         <div className="space-y-4">
-          <div className="rounded-xl border bg-muted/20 p-4">
-            <div className="text-sm font-medium text-muted-foreground">Server address</div>
-            <code className="mt-2 block break-all rounded-lg border bg-background px-3 py-2 text-sm">{apiEndpointLabel()}</code>
+          <div className="flex justify-end">
+            <Button type="button" className="h-9 rounded-xl" onClick={() => { setTokenName("crmctl"); setNewToken(""); setTokenMessage(""); setTokenSheetOpen(true); }}>Create token</Button>
           </div>
-          {newToken && (
-            <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
-              <div className="text-sm font-medium">New token</div>
-              <code className="mt-2 block break-all rounded-lg border bg-background px-3 py-2 text-sm">{newToken}</code>
-              <p className="mt-3 text-sm text-muted-foreground">Run this command to connect crmctl:</p>
-              <code className="mt-2 block break-all rounded-lg border bg-background px-3 py-2 text-sm">crmctl auth set --api {apiEndpointLabel()} {newToken}</code>
-            </div>
-          )}
-          <form className="grid gap-3 rounded-xl border bg-muted/20 p-4 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={createApiToken}>
-            <Input value={tokenName} onChange={(event) => setTokenName(event.target.value)} required placeholder="Token name" className="h-9 rounded-xl bg-background" />
-            <Button type="submit" className="h-9 rounded-xl" disabled={creatingToken}>{creatingToken ? "Creating..." : "Create token"}</Button>
-            {tokenMessage && <p className="text-sm text-destructive sm:col-span-2">{tokenMessage}</p>}
-          </form>
           <div className="overflow-hidden rounded-xl border">
             {apiTokens.length === 0 ? <div className="p-4 text-sm text-muted-foreground">No command line tokens yet.</div> : (
               <div className="divide-y divide-border">
@@ -1159,6 +1146,37 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
           </div>
         </div>
       </section>
+
+      <Sheet open={tokenSheetOpen} onOpenChange={setTokenSheetOpen}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle>Create command line token</SheetTitle>
+            <SheetDescription>Name this token so you can recognize it later. The setup command is shown once after creation.</SheetDescription>
+          </SheetHeader>
+          {newToken ? (
+            <div className="mt-5 space-y-4">
+              <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+                <div className="text-sm font-medium">Setup command</div>
+                <p className="mt-1 text-sm text-muted-foreground">Copy this command into your terminal.</p>
+                <code className="mt-3 block break-all rounded-lg border bg-background px-3 py-2 text-sm">crmctl auth set --api {apiEndpointLabel()} {newToken}</code>
+              </div>
+              <p className="text-sm text-muted-foreground">The token itself is only shown in that command. If you close this sheet before copying it, revoke this token and create a new one.</p>
+              <div className="flex justify-end">
+                <Button type="button" className="h-9 rounded-xl" onClick={() => setTokenSheetOpen(false)}>Done</Button>
+              </div>
+            </div>
+          ) : (
+            <form className="mt-5 grid gap-4" onSubmit={createApiToken}>
+              <LabeledInput label="Token name" value={tokenName} onChange={setTokenName} required placeholder="crmctl on MacBook" />
+              {tokenMessage && <p className="text-sm text-destructive">{tokenMessage}</p>}
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" className="h-9 rounded-xl bg-background" disabled={creatingToken} onClick={() => setTokenSheetOpen(false)}>Cancel</Button>
+                <Button type="submit" className="h-9 rounded-xl" disabled={creatingToken}>{creatingToken ? "Creating..." : "Create token"}</Button>
+              </div>
+            </form>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <Sheet open={emailModalOpen} onOpenChange={setEmailModalOpen}>
         <SheetContent className="w-full overflow-hidden p-0 sm:max-w-xl">
@@ -1444,7 +1462,7 @@ function DashboardPanel({ tasks, suggestions, people, companies, deals, onSelect
                 <div className="border-b">
                   <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-3.5">
                     <div className="flex items-baseline gap-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-[oklch(0.38_0.08_45)]">Now</h3>
+                      <h3 className="text-xs font-semibold text-[oklch(0.38_0.08_45)]">Now</h3>
                       <span className="text-xs text-[oklch(0.46_0.055_58)]">overdue, due today, or high priority</span>
                     </div>
                     <span className="text-xs tabular-nums text-[oklch(0.46_0.055_58)]">{nowTasks.length}</span>
@@ -1473,7 +1491,7 @@ function DashboardPanel({ tasks, suggestions, people, companies, deals, onSelect
                 <div>
                   <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-3.5">
                     <div className="flex items-baseline gap-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Next</h3>
+                      <h3 className="text-xs font-semibold text-muted-foreground">Next</h3>
                       <span className="text-xs text-muted-foreground">remaining open tasks</span>
                     </div>
                     <span className="text-xs tabular-nums text-muted-foreground">{laterTasks.length}</span>

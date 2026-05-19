@@ -22,30 +22,6 @@ This project expects local Postgres by default. The configured connection string
 postgres://postgres:postgres@localhost:5432/crme?sslmode=disable
 ```
 
-### Loading `.env` with fish
-
-Recommended: use `direnv`.
-
-```fish
-brew install direnv
-echo 'direnv hook fish | source' >> ~/.config/fish/config.fish
-exec fish
-
-echo 'dotenv .env' > .envrc
-direnv allow
-```
-
-After that, `.env` is loaded automatically when you enter the project directory.
-
-Check:
-
-```fish
-echo $CRME_SECRET_KEY
-go run ./cmd/server
-```
-
-Health: `GET http://localhost:8080/healthz`
-
 ## API
 
 Authenticated CRM requests are scoped to an organization with `?organization_id=...`. Organizations are the tenant/security boundary; workspaces are shared org-level grouping/filtering, not a permission boundary.

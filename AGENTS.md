@@ -42,6 +42,10 @@ When your changes create orphans:
 
 The test: Every changed line should trace directly to the user's request.
 
+## Project UI / Copy Rules
+
+- Do not use all-caps labels or uppercase styling for UI copy. Prefer sentence case and plain, user-facing labels.
+
 ## Project Architecture Rules
 
 - Backend mutations must go through usecase/service methods. Do not call stores/adapters directly from HTTP handlers, assistant action execution, jobs, or other orchestration code when a usecase exists.

@@ -24,7 +24,7 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
-	base := getenv("CRME_API", "http://localhost:8080")
+	base := apiBase()
 	client := &http.Client{Timeout: 30 * time.Second}
 	cmd := os.Args[1]
 	args, jsonOut := parseGlobalArgs(os.Args[2:])
@@ -220,7 +220,7 @@ Default output is a readable table/key-value view. Use --json for raw API JSON.
 
 commands:
   chat
-  auth set <api-token> | auth show | auth clear
+  auth set [--api <url>] <api-token> | auth show | auth clear
   magic-link email=you@example.com | me | capabilities
   organizations | organization-create name=... | organization-members id=<org> | organization-member-update id=<org> user_id=<user> role=admin | organization-member-remove id=<org> user_id=<user>
   organization-invitations id=<org> | organization-invite id=<org> email=... role=member | organization-invitation-resend id=<org> invitation_id=<uuid> | invitation-get token=... | invitation-accept token=...
@@ -245,42 +245,73 @@ commands:
 }
 
 func runAuth(args []string, base string) {
+	usage := "usage: crmctl auth set [--api <url>] <api-token> | auth show | auth clear"
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: crmctl auth set <api-token> | auth show | auth clear")
+		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
 	switch args[0] {
 	case "set":
-		token := ""
-		if len(args) > 1 {
-			token = args[1]
-		}
-		if strings.HasPrefix(token, "token=") {
-			token = strings.TrimPrefix(token, "token=")
+		token, api := "", base
+		for i := 1; i < len(args); i++ {
+			if args[i] == "--api" && i+1 < len(args) {
+				api = args[i+1]
+				i++
+				continue
+			}
+			if strings.HasPrefix(args[i], "--api=") {
+				api = strings.TrimPrefix(args[i], "--api=")
+				continue
+			}
+			if strings.HasPrefix(args[i], "token=") {
+				token = strings.TrimPrefix(args[i], "token=")
+				continue
+			}
+			if token == "" {
+				token = args[i]
+			}
 		}
 		if token == "" {
-			fatal(fmt.Errorf("api token is required"))
+			fatal(fmt.Errorf("token is required"))
 		}
-		if err := storeAPIToken(base, token); err != nil {
+		api = strings.TrimRight(api, "/")
+		if err := storeDefaultAPI(api); err != nil {
 			fatal(err)
 		}
-		fmt.Println("API token saved.")
+		if err := storeAPIToken(api, token); err != nil {
+			fatal(err)
+		}
+		fmt.Printf("Token saved for %s.\n", api)
 	case "show":
 		token, source := apiToken(base)
+		fmt.Printf("Server address: %s\n", base)
 		if token == "" {
-			fmt.Println("No API token configured.")
+			fmt.Println("Token: not configured")
 			return
 		}
-		fmt.Printf("API token: %s (%s)\n", maskToken(token), source)
+		fmt.Printf("Token: %s (%s)\n", maskToken(token), source)
 	case "clear":
 		if err := clearAPIToken(base); err != nil {
 			fatal(err)
 		}
-		fmt.Println("API token cleared.")
+		if err := clearDefaultAPI(); err != nil {
+			fatal(err)
+		}
+		fmt.Println("Token cleared.")
 	default:
-		fmt.Fprintln(os.Stderr, "usage: crmctl auth set <api-token> | auth show | auth clear")
+		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
+}
+
+func apiBase() string {
+	if base := os.Getenv("CRME_API"); base != "" {
+		return strings.TrimRight(base, "/")
+	}
+	if base, err := os.ReadFile(defaultAPIFile()); err == nil && strings.TrimSpace(string(base)) != "" {
+		return strings.TrimRight(strings.TrimSpace(string(base)), "/")
+	}
+	return "http://localhost:8080"
 }
 
 func setAuthHeaders(req *http.Request, base string) {
@@ -349,12 +380,35 @@ func keychainService(base string) string {
 	return "crme:" + strings.TrimRight(base, "/")
 }
 
-func tokenFile(base string) string {
+func storeDefaultAPI(base string) error {
+	path := defaultAPIFile()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(strings.TrimRight(base, "/")+"\n"), 0o600)
+}
+
+func clearDefaultAPI() error {
+	if err := os.Remove(defaultAPIFile()); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func configDir() string {
 	dir, err := os.UserConfigDir()
 	if err != nil || dir == "" {
-		dir = "."
+		return "."
 	}
-	return filepath.Join(dir, "crme", url.QueryEscape(strings.TrimRight(base, "/")), "token")
+	return filepath.Join(dir, "crme")
+}
+
+func defaultAPIFile() string {
+	return filepath.Join(configDir(), "api")
+}
+
+func tokenFile(base string) string {
+	return filepath.Join(configDir(), url.QueryEscape(strings.TrimRight(base, "/")), "token")
 }
 
 func maskToken(token string) string {

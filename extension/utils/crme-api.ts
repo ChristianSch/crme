@@ -2,20 +2,20 @@ import type { CrmeCompany, CrmePerson, ExtensionSettings, LinkedInCompanyData, L
 
 export class CrmeApiClient {
   private baseUrl: string;
-  private sessionId: string;
+  private apiToken: string;
 
   constructor(settings: ExtensionSettings) {
     this.baseUrl = settings.crmeUrl.replace(/\/$/, '');
-    this.sessionId = settings.sessionId;
+    this.apiToken = settings.apiToken;
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    if (!this.sessionId) throw new Error('CRME session id is not configured');
+    if (!this.apiToken) throw new Error('CRME token is not configured');
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...init,
       headers: {
         'Content-Type': 'application/json',
-        'X-CRM-Session': this.sessionId,
+        'Authorization': `Bearer ${this.apiToken}`,
         ...init.headers,
       },
     });

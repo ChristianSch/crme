@@ -32,14 +32,11 @@ Or use the generated zip:
 extension/dist/crme-linkedin-extension-chrome.zip
 ```
 
-In the popup configure:
-
-- CRME API URL, for local dev usually `http://localhost:8080`
-- CRME session id from magic-link login
+In CRME settings, use **Set up extension** to create a browser extension token. Copy the setup code and paste it into the extension popup. Manual server URL and token fields are available in the popup if needed.
 
 ## CRME requirements
 
-The API server must be running and the session id must be valid. The extension sends it as `X-CRM-Session`.
+The API server must be running and the token must be valid. The extension sends it as `Authorization: Bearer <token>`.
 
 For mutating requests, the API must allow the extension origin. The bundled Chrome extension has a stable origin:
 

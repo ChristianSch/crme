@@ -767,6 +767,7 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
   const [inviting, setInviting] = useState(false);
   const [message, setMessage] = useState("");
   const [tokenName, setTokenName] = useState("crmctl");
+  const [tokenSetupKind, setTokenSetupKind] = useState<"crmctl" | "extension">("crmctl");
   const [newToken, setNewToken] = useState("");
   const [tokenMessage, setTokenMessage] = useState("");
   const [creatingToken, setCreatingToken] = useState(false);
@@ -850,12 +851,29 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
     try {
       const token = await api.createApiToken(tokenName);
       setNewToken(token.token ?? "");
-      setTokenName("crmctl");
+      setTokenName(tokenSetupKind === "extension" ? "Browser extension" : "crmctl");
       await onRefresh();
     } catch (err) {
       setTokenMessage(err instanceof Error ? err.message : "Could not create token");
     } finally {
       setCreatingToken(false);
+    }
+  }
+
+  function openTokenSheet(kind: "crmctl" | "extension") {
+    setTokenSetupKind(kind);
+    setTokenName(kind === "extension" ? "Browser extension" : "crmctl");
+    setNewToken("");
+    setTokenMessage("");
+    setTokenSheetOpen(true);
+  }
+
+  async function copyText(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      onToast(`${label} copied.`);
+    } catch {
+      onToast("Could not copy to clipboard.");
     }
   }
 
@@ -982,8 +1000,15 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
           <p className="mt-1 text-sm text-muted-foreground">Create personal tokens for crmctl or other API clients.</p>
         </div>
         <div className="space-y-4">
+          <div className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-sm font-medium">Browser extension setup</div>
+              <p className="mt-1 text-sm text-muted-foreground">Create a token for the LinkedIn extension and copy the server URL into the popup.</p>
+            </div>
+            <Button type="button" className="h-9 rounded-xl" onClick={() => openTokenSheet("extension")}>Set up extension</Button>
+          </div>
           <div className="flex justify-end">
-            <Button type="button" className="h-9 rounded-xl" onClick={() => { setTokenName("crmctl"); setNewToken(""); setTokenMessage(""); setTokenSheetOpen(true); }}>Create API token</Button>
+            <Button type="button" variant="outline" className="h-9 rounded-xl bg-background" onClick={() => openTokenSheet("crmctl")}>Create token</Button>
           </div>
           <div className="overflow-hidden rounded-xl border">
             {apiTokens.length === 0 ? <div className="p-4 text-sm text-muted-foreground">No API tokens yet.</div> : (
@@ -1148,26 +1173,40 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
       </section>
 
       <Sheet open={tokenSheetOpen} onOpenChange={setTokenSheetOpen}>
-        <SheetContent className="w-full overflow-hidden p-0 sm:max-w-xl">
+        <SheetContent className="flex h-full w-full flex-col overflow-hidden p-0 sm:max-w-xl">
           <SheetHeader className="border-b py-6 pl-6 pr-16 text-left">
-            <SheetTitle className="text-xl tracking-[-0.025em]">Create API token</SheetTitle>
-            <SheetDescription>Name this token so you can recognize it later. The crmctl setup command is shown once after creation.</SheetDescription>
+            <SheetTitle className="text-xl tracking-[-0.025em]">{tokenSetupKind === "extension" ? "Set up browser extension" : "Create API token"}</SheetTitle>
+            <SheetDescription>{tokenSetupKind === "extension" ? "Create a token for the LinkedIn extension. The token is shown once." : "Name this token so you can recognize it later. The crmctl setup command is shown once after creation."}</SheetDescription>
           </SheetHeader>
           {newToken ? (
-            <div className="space-y-4 px-6 py-6">
-              <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
-                <div className="text-sm font-medium">crmctl setup command</div>
-                <p className="mt-1 text-sm text-muted-foreground">Copy this command into your terminal.</p>
-                <code className="mt-3 block break-all rounded-lg border bg-background px-3 py-2 text-sm">crmctl auth set --api {apiEndpointLabel()} {newToken}</code>
-              </div>
-              <p className="text-sm text-muted-foreground">The token is only shown in that command. If you close this sheet before copying it, revoke this token and create a new one.</p>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-6">
+              {tokenSetupKind === "extension" ? (
+                <div className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
+                  <div>
+                    <div className="text-sm font-medium">Extension setup code</div>
+                    <p className="mt-1 text-sm text-muted-foreground">Copy this once, paste it into the extension popup, then test the connection.</p>
+                  </div>
+                  <div>
+                    <code className="block max-h-36 overflow-y-auto whitespace-pre-wrap break-all rounded-lg border bg-background px-3 py-2 text-sm">{extensionSetupCode(newToken)}</code>
+                    <Button type="button" variant="outline" className="mt-2 h-8 rounded-xl bg-background" onClick={() => copyText(extensionSetupCode(newToken), "Extension setup code")}>Copy setup code</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+                  <div className="text-sm font-medium">crmctl setup command</div>
+                  <p className="mt-1 text-sm text-muted-foreground">Copy this command into your terminal.</p>
+                  <code className="mt-3 block break-all rounded-lg border bg-background px-3 py-2 text-sm">crmctl auth set --api {apiEndpointLabel()} {newToken}</code>
+                  <Button type="button" variant="outline" className="mt-3 h-8 rounded-xl bg-background" onClick={() => copyText(`crmctl auth set --api ${apiEndpointLabel()} ${newToken}`, "crmctl command")}>Copy command</Button>
+                </div>
+              )}
+              <p className="text-sm text-muted-foreground">The token is only shown now. If you close this sheet before copying it, revoke this token and create a new one.</p>
               <div className="flex justify-end">
                 <Button type="button" className="h-9 rounded-xl" onClick={() => setTokenSheetOpen(false)}>Done</Button>
               </div>
             </div>
           ) : (
             <form className="grid gap-4 px-6 py-6" onSubmit={createApiToken}>
-              <LabeledInput label="Token name" value={tokenName} onChange={setTokenName} required placeholder="crmctl on MacBook" />
+              <LabeledInput label="Token name" value={tokenName} onChange={setTokenName} required placeholder={tokenSetupKind === "extension" ? "Browser extension" : "crmctl on MacBook"} />
               {tokenMessage && <p className="text-sm text-destructive">{tokenMessage}</p>}
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" className="h-9 rounded-xl bg-background" disabled={creatingToken} onClick={() => setTokenSheetOpen(false)}>Cancel</Button>
@@ -1241,6 +1280,12 @@ function apiEndpointLabel() {
   if (typeof window === "undefined") return API_URL;
   if (API_URL.startsWith("http")) return API_URL;
   return new URL(API_URL, window.location.origin).toString().replace(/\/$/, "");
+}
+
+function extensionSetupCode(token: string) {
+  const appUrl = typeof window === "undefined" ? "" : window.location.origin;
+  const instance = appUrl ? new URL(appUrl).host : apiEndpointLabel();
+  return JSON.stringify({ crmeUrl: apiEndpointLabel(), apiToken: token, appUrl, instance }, null, 2);
 }
 
 function auditActionLabel(action: string) {

@@ -1,11 +1,11 @@
 import { CrmeApiClient } from '../utils/crme-api';
 import { getSettings, saveSettings, addToRecentCaptures, getRecentCaptures } from '../utils/storage';
-import type { ExtensionMessage, ExtensionResponse, LinkedInProfileData, LinkedInCompanyData } from '../types';
+import type { ExtensionMessage, ExtensionResponse, ExtensionSettings, LinkedInProfileData, LinkedInCompanyData } from '../types';
 
 async function getApiClient(): Promise<CrmeApiClient> {
   const settings = await getSettings();
   if (!settings.crmeUrl) throw new Error('CRME URL not configured');
-  if (!settings.sessionId) throw new Error('CRME session id not configured');
+  if (!settings.apiToken) throw new Error('CRME token not configured');
   return new CrmeApiClient(settings);
 }
 
@@ -87,10 +87,10 @@ async function handleMessage(message: ExtensionMessage): Promise<ExtensionRespon
       }
       case 'GET_SETTINGS': {
         const settings = await getSettings();
-        return { success: true, data: { ...settings, hasSession: Boolean(settings.sessionId) } };
+        return { success: true, data: { ...settings, hasToken: Boolean(settings.apiToken) } };
       }
       case 'SAVE_SETTINGS': {
-        await saveSettings(message.payload as { crmeUrl?: string; sessionId?: string });
+        await saveSettings(message.payload as Partial<ExtensionSettings>);
         return { success: true };
       }
       case 'TEST_CONNECTION': {

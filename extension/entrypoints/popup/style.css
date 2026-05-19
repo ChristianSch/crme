@@ -11,24 +11,31 @@
 
 body {
   margin: 0;
-  min-width: 380px;
+  width: 380px;
+  height: min(620px, 100vh);
   min-height: 480px;
+  overflow: hidden;
   background: oklch(0.986 0.004 255);
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
 #app {
   min-width: 380px;
+  height: 100%;
   min-height: 480px;
 }
 
 .popup {
+  display: flex;
   width: 380px;
+  height: 100%;
   min-height: 480px;
+  flex-direction: column;
   background: oklch(0.986 0.004 255);
 }
 
@@ -45,6 +52,12 @@ input {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.header__icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
 }
 
 .header__title {
@@ -115,6 +128,9 @@ input {
 }
 
 .content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
   padding: 14px;
 }
 
@@ -154,18 +170,30 @@ input {
   color: oklch(0.34 0.01 255);
 }
 
-.input {
+.input,
+.textarea {
   width: 100%;
-  height: 38px;
   border: 1px solid oklch(0.87 0.006 255);
   border-radius: 12px;
-  padding: 0 11px;
   background: oklch(0.995 0.002 255);
   color: oklch(0.18 0.006 255);
   outline: none;
 }
 
-.input:focus {
+.input {
+  height: 38px;
+  padding: 0 11px;
+}
+
+.textarea {
+  min-height: 112px;
+  resize: vertical;
+  padding: 10px 11px;
+  line-height: 1.4;
+}
+
+.input:focus,
+.textarea:focus {
   border-color: oklch(0.52 0.08 255);
   box-shadow: 0 0 0 3px oklch(0.52 0.08 255 / 0.12);
 }
@@ -180,8 +208,63 @@ input {
 
 .button-group {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+
+.instance-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid oklch(0.92 0.006 255);
+  border-radius: 14px;
+  background: oklch(0.965 0.004 255);
+  padding: 12px;
+}
+
+.instance-card__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
+.instance-card__body {
+  min-width: 0;
+}
+
+.instance-card__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.instance-card__url {
+  overflow: hidden;
+  margin-top: 2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: oklch(0.52 0.01 255);
+}
+
+.manual-settings {
+  margin-top: 14px;
+  border-top: 1px solid oklch(0.92 0.006 255);
+  padding-top: 12px;
+}
+
+.manual-settings summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  color: oklch(0.34 0.01 255);
+}
+
+.manual-settings__body {
+  margin-top: 12px;
 }
 
 .btn {

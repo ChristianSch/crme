@@ -80,5 +80,7 @@ export type ExtensionResponse<T = unknown> = {
 
 export type ExtensionSettings = {
   crmeUrl: string;
-  sessionId: string;
+  apiToken: string;
+  appUrl: string;
+  instance: string;
 };

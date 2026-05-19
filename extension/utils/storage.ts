@@ -5,7 +5,15 @@ export const crmeUrlStorage = storage.defineItem<string>('sync:crmeUrl', {
   fallback: 'http://localhost:8080',
 });
 
-export const sessionIdStorage = storage.defineItem<string>('local:sessionId', {
+export const apiTokenStorage = storage.defineItem<string>('local:apiToken', {
+  fallback: '',
+});
+
+export const appUrlStorage = storage.defineItem<string>('sync:appUrl', {
+  fallback: '',
+});
+
+export const instanceStorage = storage.defineItem<string>('sync:instance', {
   fallback: '',
 });
 
@@ -20,16 +28,20 @@ export const lastCapturedStorage = storage.defineItem<Array<{
 });
 
 export async function getSettings(): Promise<ExtensionSettings> {
-  const [crmeUrl, sessionId] = await Promise.all([
+  const [crmeUrl, apiToken, appUrl, instance] = await Promise.all([
     crmeUrlStorage.getValue(),
-    sessionIdStorage.getValue(),
+    apiTokenStorage.getValue(),
+    appUrlStorage.getValue(),
+    instanceStorage.getValue(),
   ]);
-  return { crmeUrl, sessionId };
+  return { crmeUrl, apiToken, appUrl, instance };
 }
 
 export async function saveSettings(settings: Partial<ExtensionSettings>): Promise<void> {
   if (settings.crmeUrl !== undefined) await crmeUrlStorage.setValue(settings.crmeUrl);
-  if (settings.sessionId !== undefined) await sessionIdStorage.setValue(settings.sessionId);
+  if (settings.apiToken !== undefined) await apiTokenStorage.setValue(settings.apiToken);
+  if (settings.appUrl !== undefined) await appUrlStorage.setValue(settings.appUrl);
+  if (settings.instance !== undefined) await instanceStorage.setValue(settings.instance);
 }
 
 export async function addToRecentCaptures(capture: {

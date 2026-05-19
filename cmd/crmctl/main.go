@@ -229,10 +229,66 @@ Authentication:
   Auth precedence: CRME_TOKEN, saved auth token, then CRME_SESSION.
 
 Input and output:
-  Use --json after the command for raw API JSON.
+  Use --json after the command for raw API JSON. Agents should usually use --json.
   POST, PUT, and PATCH commands accept JSON on stdin or key=value pairs.
   key=value values coerce true/false and integers. due=... is sent as due_at.
   Supported due shorthands: today, tomorrow, eom, end-of-month, end-of-this-month, end-of-may, in N days, in N weeks.
+
+How to work with crmctl:
+  1. Run read commands to find ids before mutating records.
+  2. Use exact ids returned by list/search commands; do not guess ids.
+  3. Prefer narrow queries, for example people q=ada --json or search q=acme --json.
+  4. Use key=value for simple writes and stdin JSON for nested bodies like activity-create.
+  5. After a write, run the related read command to verify the result.
+
+Common examples:
+  crmctl me --json
+    Show the authenticated user, capabilities, organizations, and current organization.
+
+  crmctl search q=ada --json
+    Search across people, companies, deals, and other indexed records.
+
+  crmctl people q=ada --json
+    Find a person id before updating, linking, creating a task, or adding timeline activity.
+
+  crmctl person-create first_name=Ada last_name=Lovelace email=ada@example.com --json
+    Create a contact. Save the returned id for links, tasks, notes, and timeline reads.
+
+  crmctl person-update id=<person-id> status=active city=London --json
+    Update fields on an existing person.
+
+  crmctl company-create name=Acme domain=acme.example --json
+    Create a company. Save the returned id before linking people or deals.
+
+  crmctl link-person-company person_id=<person-id> company_id=<company-id> role=buyer --json
+    Link a person to a company after both ids are known.
+
+  crmctl task-create entity_type=person entity_id=<person-id> title="Follow up" due=tomorrow --json
+    Create a task attached to a person, company, or deal. due= is converted to due_at.
+
+  crmctl task-complete id=<task-id> --json
+    Mark a task complete.
+
+  crmctl deal-create name="Acme pilot" company_id=<company-id> stage=qualified value_cents=500000 currency=USD --json
+    Create a deal or opportunity. Link people and companies separately when needed.
+
+  crmctl notes limit=20 --json
+    List recent notes across the CRM. Use timeline for activity on a specific entity.
+
+  crmctl activity-create '{"activity":{"type":"note","body":"Met at conference"},"links":[{"entity_type":"person","entity_id":"<person-id>"}]}' --json
+    Create a note or timeline activity. Use stdin JSON for complex activity bodies.
+
+  crmctl timeline entity_type=person entity_id=<person-id> --json
+    Verify notes, calls, meetings, emails, and other timeline activity for an entity.
+
+  crmctl suggestion-accept id=<suggestion-id> --json
+    Accept an AI suggestion. Use suggestion-dismiss for one-off dismissal or suggestion-suppress to stop similar future suggestions.
+
+  crmctl email-accounts --json
+    List connected mailboxes before syncing or updating account settings.
+
+  crmctl email-sync limit=50 --json
+    Run an on-demand email sync for the authenticated user's configured accounts.
 
 Auth commands:
   auth set --api <url> <api-token>

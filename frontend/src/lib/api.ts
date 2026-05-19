@@ -267,7 +267,7 @@ export function storedOrganizationId() {
 }
 
 function pathWithOrganization(path: string) {
-  if (path.startsWith("/auth/") || path === "/me" || path.startsWith("/organizations")) return path;
+  if (path.startsWith("/auth/") || path === "/me" || path === "/organizations") return path;
   const organizationId = storedOrganizationId();
   if (!organizationId) return path;
   const [pathname, search = ""] = path.split("?");

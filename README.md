@@ -2,6 +2,12 @@
 
 A team-oriented CRM using Go, Next.js, Postgres, tern migrations, and row-level security.
 
+## Screenshots
+
+![CRME screenshot slideshow](docs/assets/crme-slideshow.webp)
+
+<img src="docs/assets/crme-agent-interaction.webp" alt="CRME agent interaction slideshow" width="420">
+
 ## License
 
 CRME is source-available under the PolyForm Noncommercial License 1.0.0. Commercial use is not permitted without a separate commercial license. See [`LICENSE`](LICENSE), [`COMMERCIAL.md`](COMMERCIAL.md), and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

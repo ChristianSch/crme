@@ -131,6 +131,18 @@ func (s AuthService) Capabilities(ctx context.Context, sessionID, organizationID
 	return capabilitiesFor(role), nil
 }
 
+func (s AuthService) MeFromAccess(ctx context.Context, user domain.User, organizationID domain.ID, role string) (domain.Me, error) {
+	memberships, err := s.Organizations.ListOrganizationsForUser(ctx, user.ID)
+	if err != nil {
+		return domain.Me{}, err
+	}
+	return domain.Me{User: user, Organizations: memberships, CurrentOrganizationID: organizationID, Capabilities: capabilitiesFor(role)}, nil
+}
+
+func (s AuthService) CapabilitiesForRole(role string) domain.Capabilities {
+	return capabilitiesFor(role)
+}
+
 func (s AuthService) Access(ctx context.Context, sessionID, organizationID domain.ID) (domain.User, domain.ID, string, error) {
 	user, _, currentOrgID, role, err := s.currentAccess(ctx, sessionID, organizationID)
 	if err != nil {
@@ -140,6 +152,57 @@ func (s AuthService) Access(ctx context.Context, sessionID, organizationID domai
 		return domain.User{}, "", "", fmt.Errorf("%w: organization_id is required", ErrValidation)
 	}
 	return user, currentOrgID, role, nil
+}
+
+func (s AuthService) AccessAPIToken(ctx context.Context, token string) (domain.User, domain.ID, string, error) {
+	if token == "" || !strings.HasPrefix(token, "crme_pat_") {
+		return domain.User{}, "", "", ErrUnauthorized
+	}
+	user, orgID, role, err := s.Store.UserByAPIToken(authctx.WithAuthAccess(ctx), s.hash(token), s.now())
+	if err != nil {
+		return domain.User{}, "", "", ErrUnauthorized
+	}
+	return user, orgID, role, nil
+}
+
+func (s AuthService) ListAPITokens(ctx context.Context, userID, organizationID domain.ID) ([]domain.APIToken, error) {
+	if organizationID == "" || userID == "" {
+		return nil, ErrUnauthorized
+	}
+	return s.Store.ListAPITokens(ctx, userID, organizationID)
+}
+
+func (s AuthService) CreateAPIToken(ctx context.Context, userID, organizationID domain.ID, name string) (domain.APIToken, error) {
+	if organizationID == "" || userID == "" {
+		return domain.APIToken{}, ErrUnauthorized
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return domain.APIToken{}, fmt.Errorf("%w: token name is required", ErrValidation)
+	}
+	raw, err := randomToken()
+	if err != nil {
+		return domain.APIToken{}, err
+	}
+	secret := "crme_pat_" + raw
+	out, err := s.Store.CreateAPIToken(ctx, domain.APIToken{UserID: userID, OrganizationID: organizationID, Name: name}, s.hash(secret))
+	if err != nil {
+		return out, err
+	}
+	out.Token = secret
+	s.recordAudit(ctx, domain.AuditLog{OrganizationID: organizationID, Action: "api_token.created", TargetType: "api_token", TargetID: out.ID, Details: map[string]any{"name": name}})
+	return out, nil
+}
+
+func (s AuthService) RevokeAPIToken(ctx context.Context, userID, organizationID, tokenID domain.ID) error {
+	if organizationID == "" || userID == "" || tokenID == "" {
+		return ErrUnauthorized
+	}
+	if err := s.Store.RevokeAPIToken(ctx, userID, organizationID, tokenID, s.now()); err != nil {
+		return err
+	}
+	s.recordAudit(ctx, domain.AuditLog{OrganizationID: organizationID, Action: "api_token.revoked", TargetType: "api_token", TargetID: tokenID})
+	return nil
 }
 
 func (s AuthService) CreateOrganization(ctx context.Context, sessionID domain.ID, name string) (domain.Organization, error) {

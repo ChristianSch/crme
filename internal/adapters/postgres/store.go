@@ -291,6 +291,7 @@ var tenantTables = []string{
 	"email_messages",
 	"runtime_secrets",
 	"audit_logs",
+	"api_tokens",
 }
 
 func (s *Store) HasUsers(ctx context.Context) (bool, error) {

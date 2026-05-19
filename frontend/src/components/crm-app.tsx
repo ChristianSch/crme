@@ -36,7 +36,7 @@ import { AssistantPopover } from "@/components/assistant/assistant-popover";
 import { SuggestionsPanel, type SuggestionUndo, clearStoredSuggestionUndo, readStoredSuggestionUndo } from "@/components/suggestions/suggestions-panel";
 import { WorkspaceFilter } from "@/components/workspace-filter";
 import { useCrmData } from "@/hooks/use-crm-data";
-import { api, AuditLog, Company, Deal, EmailAccount, fullName, OrganizationInvitation, OrganizationMember, OrganizationMembership, Person, setSelectedOrganizationId, Suggestion, TimelineItem, Todo } from "@/lib/api";
+import { api, API_URL, ApiToken, AuditLog, Company, Deal, EmailAccount, fullName, OrganizationInvitation, OrganizationMember, OrganizationMembership, Person, setSelectedOrganizationId, Suggestion, TimelineItem, Todo } from "@/lib/api";
 import { compareDates, firstUsefulLine, linkedEntityLabel, relativeDate, searchable, shortDate, toggleSort, type SortDirection } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -87,6 +87,7 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
   const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
   const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [apiTokens, setApiTokens] = useState<ApiToken[]>([]);
   const [membersState, setMembersState] = useState<RelationLoadState>("idle");
   const [membersError, setMembersError] = useState("");
   const [settingsToast, setSettingsToast] = useState("");
@@ -155,16 +156,18 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
       setMembersError("");
       try {
         const canManage = organizations.find((org) => org.organization_id === selectedOrganizationId)?.role;
-        const [next, nextInvitations, nextAccounts, nextAuditLogs] = await Promise.all([
+        const [next, nextInvitations, nextAccounts, nextTokens, nextAuditLogs] = await Promise.all([
           api.organizationMembers(selectedOrganizationId),
           api.organizationInvitations(selectedOrganizationId),
           api.emailAccounts(),
+          api.apiTokens(),
           canManage === "owner" || canManage === "admin" ? api.auditLogs() : Promise.resolve([]),
         ]);
         if (!cancelled) {
           setMembers(next ?? []);
           setInvitations(nextInvitations ?? []);
           setEmailAccounts(nextAccounts ?? []);
+          setApiTokens(nextTokens ?? []);
           setAuditLogs(nextAuditLogs ?? []);
           setMembersState("ready");
         }
@@ -172,6 +175,7 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
         if (!cancelled) {
           setMembers([]);
           setEmailAccounts([]);
+          setApiTokens([]);
           setAuditLogs([]);
           setMembersError(error instanceof Error ? error.message : "Could not load settings");
           setMembersState("error");
@@ -186,15 +190,17 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
   async function refreshMembers() {
     if (!selectedOrganizationId) return;
     const canManage = organizations.find((org) => org.organization_id === selectedOrganizationId)?.role;
-    const [next, nextInvitations, nextAccounts, nextAuditLogs] = await Promise.all([
+    const [next, nextInvitations, nextAccounts, nextTokens, nextAuditLogs] = await Promise.all([
       api.organizationMembers(selectedOrganizationId),
       api.organizationInvitations(selectedOrganizationId),
       api.emailAccounts(),
+      api.apiTokens(),
       canManage === "owner" || canManage === "admin" ? api.auditLogs() : Promise.resolve([]),
     ]);
     setMembers(next ?? []);
     setInvitations(nextInvitations ?? []);
     setEmailAccounts(nextAccounts ?? []);
+    setApiTokens(nextTokens ?? []);
     setAuditLogs(nextAuditLogs ?? []);
     setMembersState("ready");
     setMembersError("");
@@ -430,6 +436,7 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
                 members={members}
                 invitations={invitations}
                 emailAccounts={emailAccounts}
+                apiTokens={apiTokens}
                 auditLogs={auditLogs}
                 state={membersState}
                 error={membersError}
@@ -753,12 +760,16 @@ function LabeledInput({ label, value, onChange, ...props }: { label: string; val
   );
 }
 
-function SettingsPanel({ organization, members, invitations, emailAccounts, auditLogs, state, error, onRefresh, onToast }: { organization?: OrganizationMembership; members: OrganizationMember[]; invitations: OrganizationInvitation[]; emailAccounts: EmailAccount[]; auditLogs: AuditLog[]; state: RelationLoadState; error: string; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
+function SettingsPanel({ organization, members, invitations, emailAccounts, apiTokens, auditLogs, state, error, onRefresh, onToast }: { organization?: OrganizationMembership; members: OrganizationMember[]; invitations: OrganizationInvitation[]; emailAccounts: EmailAccount[]; apiTokens: ApiToken[]; auditLogs: AuditLog[]; state: RelationLoadState; error: string; onRefresh: () => Promise<void>; onToast: (message: string) => void }) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [busyMemberId, setBusyMemberId] = useState("");
   const [inviting, setInviting] = useState(false);
   const [message, setMessage] = useState("");
+  const [tokenName, setTokenName] = useState("CLI");
+  const [newToken, setNewToken] = useState("");
+  const [tokenMessage, setTokenMessage] = useState("");
+  const [creatingToken, setCreatingToken] = useState(false);
   const [emailMessage, setEmailMessage] = useState("");
   const emptyEmailForm = { name: "", email: "", imap_host: "", imap_port: "993", imap_username: "", smtp_host: "", smtp_port: "587", smtp_username: "", secret: "" };
   const [emailForm, setEmailForm] = useState(emptyEmailForm);
@@ -825,6 +836,37 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
       await onRefresh();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Could not remove member");
+    } finally {
+      setBusyMemberId("");
+    }
+  }
+
+  async function createApiToken(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCreatingToken(true);
+    setTokenMessage("");
+    setNewToken("");
+    try {
+      const token = await api.createApiToken(tokenName);
+      setNewToken(token.token ?? "");
+      setTokenName("CLI");
+      await onRefresh();
+    } catch (err) {
+      setTokenMessage(err instanceof Error ? err.message : "Could not create API token");
+    } finally {
+      setCreatingToken(false);
+    }
+  }
+
+  async function revokeApiToken(token: ApiToken) {
+    setBusyMemberId(token.id);
+    setTokenMessage("");
+    try {
+      await api.revokeApiToken(token.id);
+      await onRefresh();
+      onToast("API token revoked.");
+    } catch (err) {
+      setTokenMessage(err instanceof Error ? err.message : "Could not revoke API token");
     } finally {
       setBusyMemberId("");
     }
@@ -930,6 +972,47 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
         <div className="rounded-xl border bg-muted/20 p-4">
           <div className="text-sm font-medium">{organization?.name ?? "No team selected"}</div>
           <div className="mt-1 text-sm text-muted-foreground">Your role: <span className="capitalize text-foreground">{organization?.role ?? "unknown"}</span></div>
+        </div>
+      </section>
+
+      <section className="grid gap-5 p-5 lg:grid-cols-[280px_minmax(0,1fr)] lg:p-6">
+        <div>
+          <h2 className="text-sm font-semibold">CLI access</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Create a personal API token for crmctl. Copy it now; it is shown once.</p>
+        </div>
+        <div className="space-y-4">
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <div className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">API endpoint</div>
+            <code className="mt-2 block break-all rounded-lg border bg-background px-3 py-2 text-sm">{apiEndpointLabel()}</code>
+          </div>
+          {newToken && (
+            <div className="rounded-xl border border-primary/25 bg-primary/5 p-4">
+              <div className="text-sm font-medium">New API token</div>
+              <code className="mt-2 block break-all rounded-lg border bg-background px-3 py-2 text-sm">{newToken}</code>
+              <p className="mt-3 text-sm text-muted-foreground">Authenticate crmctl:</p>
+              <code className="mt-2 block break-all rounded-lg border bg-background px-3 py-2 text-sm">crmctl auth set {newToken}</code>
+            </div>
+          )}
+          <form className="grid gap-3 rounded-xl border bg-muted/20 p-4 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={createApiToken}>
+            <Input value={tokenName} onChange={(event) => setTokenName(event.target.value)} required placeholder="Token name" className="h-9 rounded-xl bg-background" />
+            <Button type="submit" className="h-9 rounded-xl" disabled={creatingToken}>{creatingToken ? "Creating..." : "Create token"}</Button>
+            {tokenMessage && <p className="text-sm text-destructive sm:col-span-2">{tokenMessage}</p>}
+          </form>
+          <div className="overflow-hidden rounded-xl border">
+            {apiTokens.length === 0 ? <div className="p-4 text-sm text-muted-foreground">No API tokens yet.</div> : (
+              <div className="divide-y divide-border">
+                {apiTokens.map((token) => (
+                  <div key={token.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{token.name}</div>
+                      <div className="text-xs text-muted-foreground">Created {relativeDate(token.created_at)}{token.last_used_at ? ` · Last used ${relativeDate(token.last_used_at)}` : " · Never used"}</div>
+                    </div>
+                    <ConfirmAction trigger={<Button type="button" variant="outline" className="h-9 rounded-xl bg-background" disabled={busyMemberId === token.id}>Revoke</Button>} title="Revoke API token?" description={`${token.name} will stop working for CLI and automation.`} actionLabel="Revoke" onConfirm={() => revokeApiToken(token)} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -1134,6 +1217,12 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, audi
       )}
     </div>
   );
+}
+
+function apiEndpointLabel() {
+  if (typeof window === "undefined") return API_URL;
+  if (API_URL.startsWith("http")) return API_URL;
+  return new URL(API_URL, window.location.origin).toString().replace(/\/$/, "");
 }
 
 function auditActionLabel(action: string) {

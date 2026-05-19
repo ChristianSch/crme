@@ -180,6 +180,18 @@ export type EmailAccount = {
   updated_at: string;
 };
 
+export type ApiToken = {
+  id: ID;
+  organization_id?: ID;
+  user_id?: ID;
+  name: string;
+  token?: string;
+  last_used_at?: string;
+  expires_at?: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AuditLog = {
   id: ID;
   actor_user_id?: ID;
@@ -228,7 +240,7 @@ export type AcceptSuggestionResult = {
   created_entity_id?: ID;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 const ORGANIZATION_STORAGE_KEY = "crme:organization_id";
 
 let selectedOrganizationId = "";
@@ -318,6 +330,15 @@ export const api = {
   },
   organizationInvitations(organizationId: ID) {
     return request<OrganizationInvitation[]>(`/organizations/${organizationId}/invitations`);
+  },
+  apiTokens() {
+    return request<ApiToken[]>("/api-tokens");
+  },
+  createApiToken(name: string) {
+    return request<ApiToken>("/api-tokens", { method: "POST", body: JSON.stringify({ name }) });
+  },
+  revokeApiToken(id: ID) {
+    return request<{ status: string }>(`/api-tokens/${id}`, { method: "DELETE" });
   },
   inviteOrganizationMember(organizationId: ID, email: string, role: OrganizationInvitation["role"] = "member") {
     return request<OrganizationInvitation>(`/organizations/${organizationId}/invitations`, {

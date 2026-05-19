@@ -25,6 +25,7 @@ func (s *Store) CheckRequiredTables(ctx context.Context) error {
 		"organization_members",
 		"organization_invitations",
 		"audit_logs",
+		"api_tokens",
 	}
 	missing := []string{}
 	for _, table := range required {

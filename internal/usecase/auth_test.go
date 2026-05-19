@@ -85,6 +85,19 @@ func (f *authStoreFake) RevokeSession(ctx context.Context, tokenHash string, now
 	}
 	return nil
 }
+func (f *authStoreFake) ListAPITokens(ctx context.Context, userID, organizationID domain.ID) ([]domain.APIToken, error) {
+	return nil, nil
+}
+func (f *authStoreFake) CreateAPIToken(ctx context.Context, token domain.APIToken, tokenHash string) (domain.APIToken, error) {
+	token.ID = "token-1"
+	return token, nil
+}
+func (f *authStoreFake) RevokeAPIToken(ctx context.Context, userID, organizationID, tokenID domain.ID, now time.Time) error {
+	return nil
+}
+func (f *authStoreFake) UserByAPIToken(ctx context.Context, tokenHash string, now time.Time) (domain.User, domain.ID, string, error) {
+	return domain.User{ID: "user-1", Email: "user@example.com"}, "org-1", "owner", nil
+}
 
 type authOrgStoreFake struct {
 	user           domain.User

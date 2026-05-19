@@ -49,6 +49,18 @@ type OrganizationInvitation struct {
 	CreatedAt        time.Time  `json:"created_at,omitempty"`
 }
 
+type APIToken struct {
+	ID             ID         `json:"id"`
+	OrganizationID ID         `json:"organization_id,omitempty"`
+	UserID         ID         `json:"user_id,omitempty"`
+	Name           string     `json:"name"`
+	Token          string     `json:"token,omitempty"`
+	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
 type AuditLog struct {
 	ID             ID             `json:"id,omitempty"`
 	OrganizationID ID             `json:"organization_id,omitempty"`

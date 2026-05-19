@@ -8,6 +8,7 @@ import (
 
 type Access struct {
 	UserID         domain.ID
+	UserEmail      string
 	OrganizationID domain.ID
 	Role           string
 	system         bool

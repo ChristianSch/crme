@@ -48,6 +48,9 @@ func (a API) Handler() http.Handler {
 	mux.HandleFunc("GET /capabilities", a.capabilities)
 	mux.HandleFunc("GET /organizations", a.listOrganizations)
 	mux.HandleFunc("POST /organizations", a.createOrganization)
+	mux.HandleFunc("GET /api-tokens", a.listAPITokens)
+	mux.HandleFunc("POST /api-tokens", a.createAPIToken)
+	mux.HandleFunc("DELETE /api-tokens/{id}", a.revokeAPIToken)
 	mux.HandleFunc("GET /organizations/{id}/members", a.listOrganizationMembers)
 	mux.HandleFunc("PATCH /organizations/{id}/members/{user_id}", a.updateOrganizationMember)
 	mux.HandleFunc("DELETE /organizations/{id}/members/{user_id}", a.removeOrganizationMember)
@@ -220,6 +223,19 @@ func (a API) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if token := bearerToken(r); token != "" {
+			user, orgID, role, e := a.Auth.AccessAPIToken(r.Context(), token)
+			if err(w, e) {
+				return
+			}
+			if role == "viewer" && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions && !selfServiceRoute(r) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			ctx := authctx.WithAccess(r.Context(), authctx.Access{UserID: user.ID, UserEmail: user.Email, OrganizationID: orgID, Role: role})
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
 		sid := a.sessionID(r)
 		if sid == "" {
 			http.Error(w, "missing session", http.StatusUnauthorized)
@@ -231,7 +247,7 @@ func (a API) authMiddleware(next http.Handler) http.Handler {
 				http.Error(w, e.Error(), http.StatusUnauthorized)
 				return
 			}
-			ctx := authctx.WithAccess(r.Context(), authctx.Access{UserID: user.ID})
+			ctx := authctx.WithAccess(r.Context(), authctx.Access{UserID: user.ID, UserEmail: user.Email})
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -239,13 +255,17 @@ func (a API) authMiddleware(next http.Handler) http.Handler {
 		if err(w, e) {
 			return
 		}
-		if role == "viewer" && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
+		if role == "viewer" && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions && !selfServiceRoute(r) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
-		ctx := authctx.WithAccess(r.Context(), authctx.Access{UserID: user.ID, OrganizationID: orgID, Role: role})
+		ctx := authctx.WithAccess(r.Context(), authctx.Access{UserID: user.ID, UserEmail: user.Email, OrganizationID: orgID, Role: role})
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func selfServiceRoute(r *http.Request) bool {
+	return r.URL.Path == "/api-tokens" || strings.HasPrefix(r.URL.Path, "/api-tokens/")
 }
 
 func (a API) orgOptionalRoute(r *http.Request) bool {
@@ -271,6 +291,14 @@ func (a API) requestMagicLink(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "sent"})
 }
+func bearerToken(r *http.Request) string {
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	if len(auth) < len("Bearer ") || !strings.EqualFold(auth[:len("Bearer ")], "Bearer ") {
+		return ""
+	}
+	return strings.TrimSpace(auth[len("Bearer "):])
+}
+
 func (a API) sessionID(r *http.Request) domain.ID {
 	sid := r.Header.Get("X-CRM-Session")
 	if sid == "" {
@@ -320,6 +348,14 @@ func (a API) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a API) me(w http.ResponseWriter, r *http.Request) {
+	if access, ok := authctx.AccessFrom(r.Context()); ok && access.UserID != "" && access.OrganizationID != "" {
+		out, e := a.Auth.MeFromAccess(r.Context(), domain.User{ID: access.UserID, Email: access.UserEmail}, access.OrganizationID, access.Role)
+		if err(w, e) {
+			return
+		}
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
 	out, e := a.Auth.Me(r.Context(), a.sessionID(r), a.organizationID(r))
 	if err(w, e) {
 		return
@@ -328,6 +364,10 @@ func (a API) me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a API) capabilities(w http.ResponseWriter, r *http.Request) {
+	if access, ok := authctx.AccessFrom(r.Context()); ok && access.Role != "" {
+		writeJSON(w, http.StatusOK, a.Auth.CapabilitiesForRole(access.Role))
+		return
+	}
 	out, e := a.Auth.Capabilities(r.Context(), a.sessionID(r), a.organizationID(r))
 	if err(w, e) {
 		return
@@ -336,6 +376,14 @@ func (a API) capabilities(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a API) listOrganizations(w http.ResponseWriter, r *http.Request) {
+	if access, ok := authctx.AccessFrom(r.Context()); ok && access.UserID != "" && access.OrganizationID != "" {
+		out, e := a.Auth.MeFromAccess(r.Context(), domain.User{ID: access.UserID, Email: access.UserEmail}, access.OrganizationID, access.Role)
+		if err(w, e) {
+			return
+		}
+		writeJSON(w, http.StatusOK, out.Organizations)
+		return
+	}
 	out, e := a.Auth.Me(r.Context(), a.sessionID(r), "")
 	if err(w, e) {
 		return
@@ -355,6 +403,50 @@ func (a API) createOrganization(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, out)
+}
+
+func (a API) listAPITokens(w http.ResponseWriter, r *http.Request) {
+	access, ok := authctx.AccessFrom(r.Context())
+	if !ok || access.UserID == "" || access.OrganizationID == "" {
+		err(w, usecase.ErrUnauthorized)
+		return
+	}
+	out, e := a.Auth.ListAPITokens(r.Context(), access.UserID, access.OrganizationID)
+	if err(w, e) {
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (a API) createAPIToken(w http.ResponseWriter, r *http.Request) {
+	access, ok := authctx.AccessFrom(r.Context())
+	if !ok || access.UserID == "" || access.OrganizationID == "" {
+		err(w, usecase.ErrUnauthorized)
+		return
+	}
+	var in struct {
+		Name string `json:"name"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	out, e := a.Auth.CreateAPIToken(r.Context(), access.UserID, access.OrganizationID, in.Name)
+	if err(w, e) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, out)
+}
+
+func (a API) revokeAPIToken(w http.ResponseWriter, r *http.Request) {
+	access, ok := authctx.AccessFrom(r.Context())
+	if !ok || access.UserID == "" || access.OrganizationID == "" {
+		err(w, usecase.ErrUnauthorized)
+		return
+	}
+	if e := a.Auth.RevokeAPIToken(r.Context(), access.UserID, access.OrganizationID, domain.ID(r.PathValue("id"))); err(w, e) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
 
 func (a API) listOrganizationMembers(w http.ResponseWriter, r *http.Request) {

@@ -3,18 +3,19 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"text/tabwriter"
 	"time"
 
-	"crme/internal/adapters/ai"
 	"crme/internal/domain"
 )
 
@@ -28,7 +29,11 @@ func main() {
 	cmd := os.Args[1]
 	args, jsonOut := parseGlobalArgs(os.Args[2:])
 	if cmd == "chat" {
-		runChat(args)
+		runChat(base, client)
+		return
+	}
+	if cmd == "auth" {
+		runAuth(args, base)
 		return
 	}
 	var method, path string
@@ -36,12 +41,38 @@ func main() {
 	switch cmd {
 	case "magic-link":
 		method, path, body = http.MethodPost, "/auth/magic-link", magicLinkBody(args)
+	case "me":
+		method, path = http.MethodGet, "/me"+query(args)
+	case "capabilities":
+		method, path = http.MethodGet, "/capabilities"+query(args)
+	case "organizations":
+		method, path = http.MethodGet, "/organizations"+query(args)
+	case "organization-create":
+		method, path, body = http.MethodPost, "/organizations", stdinOrPairs(args)
+	case "organization-members":
+		method, path = http.MethodGet, "/organizations/"+arg(args, "id")+"/members"+queryExcept(args, "id")
+	case "organization-member-update":
+		method, path, body = http.MethodPatch, "/organizations/"+arg(args, "id")+"/members/"+arg(args, "user_id"), stdinOrPairs(args)
+	case "organization-member-remove":
+		method, path = http.MethodDelete, "/organizations/"+arg(args, "id")+"/members/"+arg(args, "user_id")
+	case "organization-invitations":
+		method, path = http.MethodGet, "/organizations/"+arg(args, "id")+"/invitations"+queryExcept(args, "id")
+	case "organization-invite":
+		method, path, body = http.MethodPost, "/organizations/"+arg(args, "id")+"/invitations", stdinOrPairs(args)
+	case "organization-invitation-resend":
+		method, path, body = http.MethodPost, "/organizations/"+arg(args, "id")+"/invitations/"+arg(args, "invitation_id")+"/resend", []byte(`{}`)
+	case "invitation-get":
+		method, path = http.MethodGet, "/invitations/"+arg(args, "token")
+	case "invitation-accept":
+		method, path, body = http.MethodPost, "/invitations/"+arg(args, "token")+"/accept", []byte(`{}`)
 	case "people":
 		method, path = http.MethodGet, "/people"+query(args)
 	case "person-create":
 		method, path, body = http.MethodPost, "/people", stdinOrPairs(args)
 	case "person-get":
 		method, path = http.MethodGet, "/people/"+arg(args, "id")
+	case "person-companies":
+		method, path = http.MethodGet, "/people/"+arg(args, "id")+"/companies"+queryExcept(args, "id")
 	case "person-update":
 		method, path, body = http.MethodPut, "/people/"+arg(args, "id"), stdinOrPairs(args)
 	case "person-delete":
@@ -52,6 +83,8 @@ func main() {
 		method, path, body = http.MethodPost, "/companies", stdinOrPairs(args)
 	case "company-get":
 		method, path = http.MethodGet, "/companies/"+arg(args, "id")
+	case "company-people":
+		method, path = http.MethodGet, "/companies/"+arg(args, "id")+"/people"+queryExcept(args, "id")
 	case "company-update":
 		method, path, body = http.MethodPut, "/companies/"+arg(args, "id"), stdinOrPairs(args)
 	case "company-delete":
@@ -62,6 +95,10 @@ func main() {
 		method, path, body = http.MethodPost, "/deals", stdinOrPairs(args)
 	case "deal-get":
 		method, path = http.MethodGet, "/deals/"+arg(args, "id")
+	case "deal-people":
+		method, path = http.MethodGet, "/deals/"+arg(args, "id")+"/people"+queryExcept(args, "id")
+	case "deal-companies":
+		method, path = http.MethodGet, "/deals/"+arg(args, "id")+"/companies"+queryExcept(args, "id")
 	case "deal-update":
 		method, path, body = http.MethodPut, "/deals/"+arg(args, "id"), stdinOrPairs(args)
 	case "deal-delete":
@@ -80,6 +117,8 @@ func main() {
 		method, path, body = http.MethodDelete, "/relationships/deal-company", stdinOrPairs(args)
 	case "activity-create":
 		method, path, body = http.MethodPost, "/activities", stdinOrPairs(args)
+	case "notes":
+		method, path = http.MethodGet, "/notes"+query(args)
 	case "activity-update":
 		method, path, body = http.MethodPut, "/activities/"+arg(args, "id"), stdinOrPairs(args)
 	case "activity-delete":
@@ -89,7 +128,7 @@ func main() {
 	case "note-delete":
 		method, path = http.MethodDelete, "/notes/"+arg(args, "id")
 	case "timeline":
-		method, path = http.MethodGet, "/timeline/"+arg(args, "entity_type")+"/"+arg(args, "entity_id")+query(args)
+		method, path = http.MethodGet, "/timeline/"+arg(args, "entity_type")+"/"+arg(args, "entity_id")+queryExcept(args, "entity_type", "entity_id")
 	case "search":
 		method, path = http.MethodGet, "/search"+query(args)
 	case "tags":
@@ -103,11 +142,11 @@ func main() {
 	case "workspace-create":
 		method, path, body = http.MethodPost, "/workspaces", stdinOrPairs(args)
 	case "workspace-entities":
-		method, path = http.MethodGet, "/workspaces/"+arg(args, "id")+"/entities"+query(args)
+		method, path = http.MethodGet, "/workspaces/"+arg(args, "id")+"/entities"+queryExcept(args, "id")
 	case "workspace-link":
 		method, path, body = http.MethodPost, "/workspaces/link", stdinOrPairs(args)
 	case "tasks":
-		method, path = http.MethodGet, "/dashboard/action-items"+query(args)
+		method, path = http.MethodGet, "/tasks"+query(args)
 	case "task-create":
 		method, path, body = http.MethodPost, "/tasks", stdinOrPairs(args)
 	case "task-update":
@@ -122,8 +161,16 @@ func main() {
 		method, path = http.MethodGet, "/email/accounts"+query(args)
 	case "email-account-create":
 		method, path, body = http.MethodPost, "/email/accounts", stdinOrPairs(args)
+	case "email-account-test":
+		method, path, body = http.MethodPost, "/email/accounts/test", stdinOrPairs(args)
+	case "email-account-update":
+		method, path, body = http.MethodPatch, "/email/accounts/"+arg(args, "id"), stdinOrPairs(args)
+	case "email-account-delete":
+		method, path = http.MethodDelete, "/email/accounts/"+arg(args, "id")
 	case "email-sync":
 		method, path, body = http.MethodPost, "/email/sync"+query(args), []byte(`{}`)
+	case "assistant-conversations":
+		method, path = http.MethodGet, "/ai/conversations"+query(args)
 	case "suggestions":
 		method, path = http.MethodGet, "/ai/prompts"+query(args)
 	case "suggestion-create":
@@ -138,6 +185,8 @@ func main() {
 		method, path, body = http.MethodPost, "/ai/prompts/resolve", suggestionDismissBody(args)
 	case "suggestion-suppress":
 		method, path, body = http.MethodPost, "/ai/prompts/resolve", suggestionSuppressBody(args)
+	case "audit-logs":
+		method, path = http.MethodGet, "/audit-logs"+query(args)
 	default:
 		usage()
 		os.Exit(2)
@@ -149,9 +198,7 @@ func main() {
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if session := os.Getenv("CRME_SESSION"); session != "" {
-		req.Header.Set("X-CRM-Session", session)
-	}
+	setAuthHeaders(req, base)
 	resp, err := client.Do(req)
 	if err != nil {
 		fatal(err)
@@ -173,38 +220,163 @@ Default output is a readable table/key-value view. Use --json for raw API JSON.
 
 commands:
   chat
-  magic-link email=you@example.com
-  people [q=... limit=...] | person-get id=<uuid> | person-create [workspace_id=<uuid>] ... | person-update id=<uuid> ... | person-delete id=<uuid>
-  companies | company-get id=<uuid> | company-create [workspace_id=<uuid>] ... | company-update id=<uuid> ... | company-delete id=<uuid>
-  deals | deal-get id=<uuid> | deal-create ... | deal-update id=<uuid> ... | deal-delete id=<uuid>
+  auth set <api-token> | auth show | auth clear
+  magic-link email=you@example.com | me | capabilities
+  organizations | organization-create name=... | organization-members id=<org> | organization-member-update id=<org> user_id=<user> role=admin | organization-member-remove id=<org> user_id=<user>
+  organization-invitations id=<org> | organization-invite id=<org> email=... role=member | organization-invitation-resend id=<org> invitation_id=<uuid> | invitation-get token=... | invitation-accept token=...
+  people [q=... limit=...] | person-get id=<uuid> | person-companies id=<uuid> | person-create [workspace_id=<uuid>] ... | person-update id=<uuid> ... | person-delete id=<uuid>
+  companies | company-get id=<uuid> | company-people id=<uuid> | company-create [workspace_id=<uuid>] ... | company-update id=<uuid> ... | company-delete id=<uuid>
+  deals | deal-get id=<uuid> | deal-people id=<uuid> | deal-companies id=<uuid> | deal-create ... | deal-update id=<uuid> ... | deal-delete id=<uuid>
   link-person-company person_id=<uuid> company_id=<uuid> role=buyer | unlink-person-company person_id=<uuid> company_id=<uuid>
   link-deal-person deal_id=<uuid> person_id=<uuid> | unlink-deal-person deal_id=<uuid> person_id=<uuid> | link-deal-company deal_id=<uuid> company_id=<uuid> | unlink-deal-company deal_id=<uuid> company_id=<uuid>
-  activity-create '{"activity":{"type":"note","body":"..."},"links":[...]}' | activity-update id=<uuid> type=note body=... occurred_at=... | activity-delete id=<uuid> | note-update id=<uuid> body=... occurred_at=... | note-delete id=<uuid>
+  activity-create '{"activity":{"type":"note","body":"..."},"links":[...]}' | activity-update id=<uuid> type=note body=... occurred_at=... | activity-delete id=<uuid> | notes | note-update id=<uuid> body=... occurred_at=... | note-delete id=<uuid>
   timeline entity_type=person entity_id=<uuid> | search q=ada
   tags | tag-create name=Important color=red | tag-attach tag_id=<uuid> entity_type=person entity_id=<uuid>
   workspaces | workspace-create name=... description=... | workspace-entities id=<uuid> [entity_type=person|company|deal|task]
   workspace-link workspace_id=<uuid> entity_type=person|company|deal|task entity_id=<uuid>
   tasks | task-create workspace_id=<uuid> entity_type=person entity_id=<uuid> title="Follow up" due=end-of-may | task-update id=<uuid> due=tomorrow | task-complete id=<uuid> | task-delete id=<uuid>
   dashboard
-  email-accounts | email-account-create name=Work email=me@example.com imap_host=... smtp_host=... secret=...
+  email-accounts | email-account-create name=Work email=me@example.com imap_host=... smtp_host=... secret=... | email-account-test ... | email-account-update id=<uuid> ... | email-account-delete id=<uuid>
   email-sync [limit=...]
+  assistant-conversations | audit-logs [limit=... offset=...]
   suggestions [status=open] | suggestion-create kind=follow_up entity_type=person entity_id=<uuid> context="..."
   suggestion-accept id=<uuid> | suggestion-link-person id=<uuid> person_id=<uuid> | suggestion-link-company id=<uuid> company_id=<uuid>
   suggestion-dismiss id=<uuid> | suggestion-suppress id=<uuid>`)
 }
 
+func runAuth(args []string, base string) {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: crmctl auth set <api-token> | auth show | auth clear")
+		os.Exit(2)
+	}
+	switch args[0] {
+	case "set":
+		token := ""
+		if len(args) > 1 {
+			token = args[1]
+		}
+		if strings.HasPrefix(token, "token=") {
+			token = strings.TrimPrefix(token, "token=")
+		}
+		if token == "" {
+			fatal(fmt.Errorf("api token is required"))
+		}
+		if err := storeAPIToken(base, token); err != nil {
+			fatal(err)
+		}
+		fmt.Println("API token saved.")
+	case "show":
+		token, source := apiToken(base)
+		if token == "" {
+			fmt.Println("No API token configured.")
+			return
+		}
+		fmt.Printf("API token: %s (%s)\n", maskToken(token), source)
+	case "clear":
+		if err := clearAPIToken(base); err != nil {
+			fatal(err)
+		}
+		fmt.Println("API token cleared.")
+	default:
+		fmt.Fprintln(os.Stderr, "usage: crmctl auth set <api-token> | auth show | auth clear")
+		os.Exit(2)
+	}
+}
+
+func setAuthHeaders(req *http.Request, base string) {
+	if token, _ := apiToken(base); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+		return
+	}
+	if session := os.Getenv("CRME_SESSION"); session != "" {
+		req.Header.Set("X-CRM-Session", session)
+	}
+}
+
+func apiToken(base string) (string, string) {
+	if token := os.Getenv("CRME_TOKEN"); token != "" {
+		return token, "CRME_TOKEN"
+	}
+	if token, err := keychainToken(base); err == nil && token != "" {
+		return token, "keychain"
+	}
+	if token, err := os.ReadFile(tokenFile(base)); err == nil {
+		return strings.TrimSpace(string(token)), tokenFile(base)
+	}
+	return "", ""
+}
+
+func storeAPIToken(base, token string) error {
+	if runtime.GOOS == "darwin" {
+		if err := exec.Command("security", "add-generic-password", "-a", keychainAccount(), "-s", keychainService(base), "-w", token, "-U").Run(); err == nil {
+			_ = os.Remove(tokenFile(base))
+			return nil
+		}
+	}
+	path := tokenFile(base)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(token+"\n"), 0o600)
+}
+
+func clearAPIToken(base string) error {
+	if runtime.GOOS == "darwin" {
+		_ = exec.Command("security", "delete-generic-password", "-a", keychainAccount(), "-s", keychainService(base)).Run()
+	}
+	if err := os.Remove(tokenFile(base)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func keychainToken(base string) (string, error) {
+	if runtime.GOOS != "darwin" {
+		return "", fmt.Errorf("keychain unavailable")
+	}
+	out, err := exec.Command("security", "find-generic-password", "-a", keychainAccount(), "-s", keychainService(base), "-w").Output()
+	return strings.TrimSpace(string(out)), err
+}
+
+func keychainAccount() string {
+	if user := os.Getenv("USER"); user != "" {
+		return user
+	}
+	return "default"
+}
+
+func keychainService(base string) string {
+	return "crme:" + strings.TrimRight(base, "/")
+}
+
+func tokenFile(base string) string {
+	dir, err := os.UserConfigDir()
+	if err != nil || dir == "" {
+		dir = "."
+	}
+	return filepath.Join(dir, "crme", url.QueryEscape(strings.TrimRight(base, "/")), "token")
+}
+
+func maskToken(token string) string {
+	if len(token) <= 14 {
+		return "••••"
+	}
+	return token[:9] + "…" + token[len(token)-4:]
+}
+
 var chatInput *bufio.Reader
 
-func runChat(args []string) {
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	if apiKey == "" {
-		fatal(fmt.Errorf("OPENROUTER_API_KEY is required for chat"))
-	}
-	model := getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-	assistant := ai.OpenRouter{APIKey: apiKey, Model: model}
+type chatCompletion struct {
+	Text           string           `json:"text"`
+	PendingAction  *domain.AIAction `json:"pending_action"`
+	ConversationID domain.ID        `json:"conversation_id"`
+}
+
+func runChat(base string, client *http.Client) {
 	chatInput = bufio.NewReader(os.Stdin)
 	history := []domain.AIMessage{}
-	fmt.Printf("crme chat (%s). Type exit to quit.\n", model)
+	var conversationID domain.ID
+	fmt.Println("crme chat. Type exit to quit.")
 	for {
 		fmt.Print("> ")
 		line, err := chatInput.ReadString('\n')
@@ -222,99 +394,71 @@ func runChat(args []string) {
 			break
 		}
 		history = append(history, domain.AIMessage{Role: "user", Content: input})
-		answer, updated, err := chatTurn(context.Background(), assistant, history)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			continue
+		for {
+			completion, err := chatTurn(base, client, conversationID, history)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				break
+			}
+			conversationID = completion.ConversationID
+			history = append(history, domain.AIMessage{Role: "assistant", Content: completion.Text})
+			if strings.TrimSpace(completion.Text) != "" {
+				fmt.Println(completion.Text)
+			}
+			if completion.PendingAction == nil {
+				break
+			}
+			action := *completion.PendingAction
+			if !confirmCommand(action.Command, action.Args) {
+				history = append(history, domain.AIMessage{Role: "user", Content: "Action cancelled by user."})
+				break
+			}
+			out, err := executeAssistantAction(base, client, action)
+			if err != nil {
+				out = []byte("ERROR: " + err.Error() + "\n" + string(out))
+			}
+			history = append(history, domain.AIMessage{Role: "user", Content: "Action result:\n" + truncate(string(out), 6000)})
 		}
-		history = append(updated, domain.AIMessage{Role: "assistant", Content: answer})
-		fmt.Println(answer)
 	}
 }
 
-func chatTurn(ctx context.Context, assistant ai.OpenRouter, history []domain.AIMessage) (string, []domain.AIMessage, error) {
-	messages := append([]domain.AIMessage(nil), history...)
-	for i := 0; i < 10; i++ {
-		completion, err := assistant.Complete(ctx, domain.AICompletionRequest{System: chatSystemPrompt(), Messages: messages})
-		if err != nil {
-			return "", history, err
-		}
-		resp, err := parseChatResponse(completion.Text)
-		if err != nil {
-			return strings.TrimSpace(completion.Text), messages, nil
-		}
-		if resp.Type == "final" {
-			return resp.Message, messages, nil
-		}
-		if resp.Type != "command" {
-			return "", history, fmt.Errorf("unknown chat response type %q", resp.Type)
-		}
-		out, err := runCRMCTLCommand(ctx, resp.Command, resp.Args)
-		if err != nil {
-			out = "ERROR: " + err.Error() + "\n" + out
-		}
-		requestJSON, _ := json.Marshal(resp)
-		messages = append(messages,
-			domain.AIMessage{Role: "assistant", Content: string(requestJSON)},
-			domain.AIMessage{Role: "user", Content: "crmctl output:\n" + truncate(out, 6000)},
-		)
-	}
-	return "", history, fmt.Errorf("chat exceeded command limit")
-}
-
-type chatResponse struct {
-	Type    string   `json:"type"`
-	Message string   `json:"message"`
-	Command string   `json:"command"`
-	Args    []string `json:"args"`
-	Reason  string   `json:"reason"`
-}
-
-func parseChatResponse(s string) (chatResponse, error) {
-	s = strings.TrimSpace(s)
-	s = strings.TrimPrefix(s, "```json")
-	s = strings.TrimPrefix(s, "```")
-	s = strings.TrimSuffix(s, "```")
-	s = strings.TrimSpace(s)
-	var resp chatResponse
-	if err := json.Unmarshal([]byte(s), &resp); err == nil {
-		return resp, nil
-	}
-	start := strings.Index(s, "{")
-	end := strings.LastIndex(s, "}")
-	if start >= 0 && end > start {
-		err := json.Unmarshal([]byte(s[start:end+1]), &resp)
-		return resp, err
-	}
-	return resp, fmt.Errorf("response did not contain a JSON object")
-}
-
-func runCRMCTLCommand(ctx context.Context, command string, args []string) (string, error) {
-	if !allowedChatCommands()[command] {
-		return "", fmt.Errorf("command %q is not allowed in chat", command)
-	}
-	if mutatingChatCommands()[command] && !confirmCommand(command, args) {
-		return "", fmt.Errorf("command cancelled")
-	}
-	exe, err := os.Executable()
+func chatTurn(base string, client *http.Client, conversationID domain.ID, history []domain.AIMessage) (chatCompletion, error) {
+	body, _ := json.Marshal(map[string]any{"conversation_id": conversationID, "messages": history})
+	out, err := apiRequest(base, client, http.MethodPost, "/ai/chat", body)
 	if err != nil {
-		return "", err
+		return chatCompletion{}, err
 	}
-	cmdArgs := []string{command, "--json"}
-	for _, a := range args {
-		if a != "--json" {
-			cmdArgs = append(cmdArgs, a)
-		}
+	var completion chatCompletion
+	if err := json.Unmarshal(out, &completion); err != nil {
+		return chatCompletion{}, err
 	}
-	cmdCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(cmdCtx, exe, cmdArgs...)
-	cmd.Env = os.Environ()
-	out, err := cmd.CombinedOutput()
-	if cmdCtx.Err() == context.DeadlineExceeded {
-		return string(out), fmt.Errorf("command timed out")
+	return completion, nil
+}
+
+func executeAssistantAction(base string, client *http.Client, action domain.AIAction) ([]byte, error) {
+	body, _ := json.Marshal(action)
+	return apiRequest(base, client, http.MethodPost, "/ai/actions/execute", body)
+}
+
+func apiRequest(base string, client *http.Client, method, path string, body []byte) ([]byte, error) {
+	req, err := http.NewRequest(method, strings.TrimRight(base, "/")+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
 	}
-	return string(out), err
+	if len(body) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	setAuthHeaders(req, base)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	out, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return out, fmt.Errorf("%s", strings.TrimSpace(string(out)))
+	}
+	return out, nil
 }
 
 func confirmCommand(command string, args []string) bool {
@@ -341,61 +485,6 @@ func formatConfirmArg(arg string) string {
 		return truncate(arg, 160)
 	}
 	return key + " = " + truncate(value, 220)
-}
-
-func allowedChatCommands() map[string]bool {
-	return map[string]bool{
-		"people": true, "person-get": true, "person-create": true, "person-update": true, "person-delete": true,
-		"companies": true, "company-get": true, "company-create": true, "company-update": true, "company-delete": true,
-		"deals": true, "deal-get": true, "deal-create": true, "deal-update": true, "deal-delete": true,
-		"link-person-company": true, "unlink-person-company": true, "link-deal-person": true, "unlink-deal-person": true, "link-deal-company": true, "unlink-deal-company": true,
-		"activity-create": true, "activity-update": true, "activity-delete": true, "note-update": true, "note-delete": true, "timeline": true, "search": true,
-		"tags": true, "tag-create": true, "tag-attach": true,
-		"workspaces": true, "workspace-create": true, "workspace-entities": true, "workspace-link": true,
-		"tasks": true, "task-create": true, "task-update": true, "task-complete": true, "task-delete": true, "dashboard": true,
-		"email-accounts": true, "email-sync": true,
-		"suggestions": true, "suggestion-create": true, "suggestion-accept": true,
-		"suggestion-link-person": true, "suggestion-link-company": true, "suggestion-dismiss": true, "suggestion-suppress": true,
-	}
-}
-
-func mutatingChatCommands() map[string]bool {
-	return map[string]bool{
-		"person-create": true, "person-update": true, "person-delete": true,
-		"company-create": true, "company-update": true, "company-delete": true,
-		"deal-create": true, "deal-update": true, "deal-delete": true,
-		"link-person-company": true, "unlink-person-company": true, "link-deal-person": true, "unlink-deal-person": true, "link-deal-company": true, "unlink-deal-company": true,
-		"activity-create": true, "activity-update": true, "activity-delete": true, "note-update": true, "note-delete": true, "tag-create": true, "tag-attach": true,
-		"workspace-create": true, "workspace-link": true,
-		"task-create": true, "task-update": true, "task-complete": true, "task-delete": true,
-		"email-sync":        true,
-		"suggestion-create": true, "suggestion-accept": true,
-		"suggestion-link-person": true, "suggestion-link-company": true, "suggestion-dismiss": true, "suggestion-suppress": true,
-	}
-}
-
-func chatSystemPrompt() string {
-	return `You are crme's CLI chat assistant. Help the user inspect and update CRM data by using crmctl commands.
-
-Respond with exactly one JSON object and no prose. Do not explain what you are about to do outside the JSON.
-For a normal answer: {"type":"final","message":"..."}
-To run a command: {"type":"command","command":"search","args":["q=ada"],"reason":"..."}
-
-Use commands only when needed. Prefer search first when the user names a person, company, or deal but does not provide an id. Do not include --json; it is added automatically.
-When you receive crmctl output, base your answer strictly on that output. If a tasks command returns a non-empty JSON array, summarize those tasks; never say there are no tasks unless the command output is exactly an empty array or an explicit no-rows response.
-Available commands:
-people [q=... limit=...], person-get id=..., person-create key=value..., person-update id=... key=value..., person-delete id=...
-companies [q=... limit=...], company-get id=..., company-create key=value..., company-update id=... key=value..., company-delete id=...
-deals [limit=...], deal-get id=..., deal-create workspace_id=... key=value..., deal-update id=... workspace_id=... key=value..., deal-delete id=...
-link-person-company person_id=... company_id=..., unlink-person-company person_id=... company_id=..., link-deal-person deal_id=... person_id=..., unlink-deal-person deal_id=... person_id=..., link-deal-company deal_id=... company_id=..., unlink-deal-company deal_id=... company_id=...
-workspaces, workspace-create name=... description=..., workspace-entities id=... [entity_type=person|company|deal|task], workspace-link workspace_id=... entity_type=person|company|deal|task entity_id=...
-search q=..., timeline entity_type=person|company|deal entity_id=... [limit=...]
-activity-create {json}, activity-update id=... type=note|call|meeting|email body=... occurred_at=..., activity-delete id=..., note-update id=... body=... occurred_at=..., note-delete id=...
-tasks, task-create workspace_id=... entity_type=... entity_id=... title=... body=... due_at=2026-05-31T17:00:00Z, task-update id=... due=tomorrow title=... body=..., task-complete id=..., task-delete id=..., dashboard
-For task dates, use due_at=<RFC3339>, due=2026-05-31, due=tomorrow, due="in 2.5 weeks", or due=end-of-may.
-suggestions [status=open], suggestion-accept id=..., suggestion-dismiss id=..., suggestion-suppress id=..., suggestion-link-person id=..., suggestion-link-company id=...
-email-accounts, email-sync [limit=...]
-Mutating commands require user confirmation before execution.`
 }
 
 func parseGlobalArgs(args []string) ([]string, bool) {
@@ -483,9 +572,15 @@ func printObject(obj map[string]any) {
 
 func columnsFor(cmd string) []string {
 	switch cmd {
-	case "people":
+	case "organizations":
+		return []string{"id", "name", "role", "created_at"}
+	case "organization-members":
+		return []string{"user_id", "email", "role", "joined_at"}
+	case "organization-invitations":
+		return []string{"id", "email", "role", "status", "expires_at"}
+	case "people", "company-people", "deal-people":
 		return []string{"id", "name", "email", "linkedin_url", "city", "status", "source", "last_touch_at"}
-	case "companies":
+	case "companies", "person-companies", "deal-companies":
 		return []string{"id", "name", "domain", "last_touch_at"}
 	case "deals":
 		return []string{"id", "workspace_id", "name", "stage", "value_cents", "currency"}
@@ -501,6 +596,12 @@ func columnsFor(cmd string) []string {
 		return []string{"entity_type", "title", "subtitle", "entity_id"}
 	case "email-accounts":
 		return []string{"id", "name", "email", "imap_host", "smtp_host", "sync_enabled"}
+	case "assistant-conversations":
+		return []string{"id", "title", "created_at", "updated_at"}
+	case "audit-logs":
+		return []string{"id", "actor_user_id", "action", "entity_type", "entity_id", "created_at"}
+	case "notes":
+		return []string{"id", "body", "occurred_at", "created_at"}
 	case "suggestions":
 		return []string{"id", "kind", "title", "status", "created_at"}
 	default:
@@ -615,19 +716,29 @@ func arg(args []string, key string) string {
 }
 
 func query(args []string) string {
+	return queryExcept(args)
+}
+
+func queryExcept(args []string, exclude ...string) string {
 	if len(args) == 0 {
 		return ""
 	}
-	parts := make([]string, 0, len(args))
+	excluded := map[string]bool{}
+	for _, key := range exclude {
+		excluded[key] = true
+	}
+	values := url.Values{}
 	for _, a := range args {
-		if strings.Contains(a, "=") {
-			parts = append(parts, a)
+		k, v, ok := strings.Cut(a, "=")
+		if ok && !excluded[k] {
+			values.Add(k, v)
 		}
 	}
-	if len(parts) == 0 {
+	encoded := values.Encode()
+	if encoded == "" {
 		return ""
 	}
-	return "?" + strings.Join(parts, "&")
+	return "?" + encoded
 }
 
 func coerceKey(k, v string) any {

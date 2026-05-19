@@ -16,6 +16,10 @@ type AuthStore interface {
 	CreateSession(ctx context.Context, userID domain.ID, email, tokenHash string, expiresAt time.Time) error
 	ValidateSession(ctx context.Context, tokenHash string, now time.Time) (email string, err error)
 	RevokeSession(ctx context.Context, tokenHash string, now time.Time) error
+	ListAPITokens(ctx context.Context, userID, organizationID domain.ID) ([]domain.APIToken, error)
+	CreateAPIToken(ctx context.Context, token domain.APIToken, tokenHash string) (domain.APIToken, error)
+	RevokeAPIToken(ctx context.Context, userID, organizationID, tokenID domain.ID, now time.Time) error
+	UserByAPIToken(ctx context.Context, tokenHash string, now time.Time) (domain.User, domain.ID, string, error)
 }
 
 type MagicLinkSender interface {

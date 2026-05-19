@@ -41,6 +41,19 @@ func (s *routeAuthStoreFake) RevokeSession(ctx context.Context, tokenHash string
 	s.revoked = domain.ID(tokenHash)
 	return nil
 }
+func (s *routeAuthStoreFake) ListAPITokens(ctx context.Context, userID, organizationID domain.ID) ([]domain.APIToken, error) {
+	return nil, nil
+}
+func (s *routeAuthStoreFake) CreateAPIToken(ctx context.Context, token domain.APIToken, tokenHash string) (domain.APIToken, error) {
+	token.ID = "token-1"
+	return token, nil
+}
+func (s *routeAuthStoreFake) RevokeAPIToken(ctx context.Context, userID, organizationID, tokenID domain.ID, now time.Time) error {
+	return nil
+}
+func (s *routeAuthStoreFake) UserByAPIToken(ctx context.Context, tokenHash string, now time.Time) (domain.User, domain.ID, string, error) {
+	return domain.User{ID: "user-1", Email: "user@example.com"}, "org-1", "owner", nil
+}
 func (s *routeAuthStoreFake) UserBySession(ctx context.Context, tokenHash string, now time.Time) (domain.User, error) {
 	return domain.User{ID: "user-1", Email: "user@example.com"}, nil
 }

@@ -24,16 +24,19 @@ func main() {
 		usage()
 		os.Exit(2)
 	}
-	base := apiBase()
 	client := &http.Client{Timeout: 30 * time.Second}
 	cmd := os.Args[1]
 	args, jsonOut := parseGlobalArgs(os.Args[2:])
-	if cmd == "chat" {
-		runChat(base, client)
+	if cmd == "auth" {
+		runAuth(args)
 		return
 	}
-	if cmd == "auth" {
-		runAuth(args, base)
+	base, err := apiBase()
+	if err != nil {
+		fatal(err)
+	}
+	if cmd == "chat" {
+		runChat(base, client)
 		return
 	}
 	var method, path string
@@ -215,44 +218,118 @@ func main() {
 func usage() {
 	fmt.Fprintln(os.Stderr, `usage: crmctl <command> [--json] [key=value...]
 
-CRME_API defaults to http://localhost:8080. POST commands accept JSON on stdin or key=value pairs.
-Default output is a readable table/key-value view. Use --json for raw API JSON.
+Setup:
+  crmctl will not run until a server and token are configured.
+  Create an API token in the web app, then run:
+    crmctl auth set --api <url> <api-token>
+  CRME_API=<url> overrides the saved server address for a single shell/session.
 
-commands:
+Authentication:
+  auth set saves the server address and token locally. On macOS it uses Keychain when available.
+  Auth precedence: CRME_TOKEN, saved auth token, then CRME_SESSION.
+
+Input and output:
+  Use --json after the command for raw API JSON.
+  POST, PUT, and PATCH commands accept JSON on stdin or key=value pairs.
+  key=value values coerce true/false and integers. due=... is sent as due_at.
+  Supported due shorthands: today, tomorrow, eom, end-of-month, end-of-this-month, end-of-may, in N days, in N weeks.
+
+Auth commands:
+  auth set --api <url> <api-token>
+  auth show
+  auth clear
+
+Interactive command:
   chat
-  auth set [--api <url>] <api-token> | auth show | auth clear
-  magic-link email=you@example.com | me | capabilities
-  organizations | organization-create name=... | organization-members id=<org> | organization-member-update id=<org> user_id=<user> role=admin | organization-member-remove id=<org> user_id=<user>
-  organization-invitations id=<org> | organization-invite id=<org> email=... role=member | organization-invitation-resend id=<org> invitation_id=<uuid> | invitation-get token=... | invitation-accept token=...
-  people [q=... limit=...] | person-get id=<uuid> | person-companies id=<uuid> | person-create [workspace_id=<uuid>] ... | person-update id=<uuid> ... | person-delete id=<uuid>
-  companies | company-get id=<uuid> | company-people id=<uuid> | company-create [workspace_id=<uuid>] ... | company-update id=<uuid> ... | company-delete id=<uuid>
-  deals | deal-get id=<uuid> | deal-people id=<uuid> | deal-companies id=<uuid> | deal-create ... | deal-update id=<uuid> ... | deal-delete id=<uuid>
-  link-person-company person_id=<uuid> company_id=<uuid> role=buyer | unlink-person-company person_id=<uuid> company_id=<uuid>
-  link-deal-person deal_id=<uuid> person_id=<uuid> | unlink-deal-person deal_id=<uuid> person_id=<uuid> | link-deal-company deal_id=<uuid> company_id=<uuid> | unlink-deal-company deal_id=<uuid> company_id=<uuid>
-  activity-create '{"activity":{"type":"note","body":"..."},"links":[...]}' | activity-update id=<uuid> type=note body=... occurred_at=... | activity-delete id=<uuid> | notes | note-update id=<uuid> body=... occurred_at=... | note-delete id=<uuid>
-  timeline entity_type=person entity_id=<uuid> | search q=ada
-  tags | tag-create name=Important color=red | tag-attach tag_id=<uuid> entity_type=person entity_id=<uuid>
-  workspaces | workspace-create name=... description=... | workspace-entities id=<uuid> [entity_type=person|company|deal|task]
-  workspace-link workspace_id=<uuid> entity_type=person|company|deal|task entity_id=<uuid>
-  tasks | task-create workspace_id=<uuid> entity_type=person entity_id=<uuid> title="Follow up" due=end-of-may | task-update id=<uuid> due=tomorrow | task-complete id=<uuid> | task-delete id=<uuid>
+
+Read commands:
+  me
+  capabilities
+  organizations
+  organization-members id=<org>
+  organization-invitations id=<org>
+  invitation-get token=<token>
+  people [q=... limit=...]
+  person-get id=<uuid>
+  person-companies id=<uuid>
+  companies [q=... limit=...]
+  company-get id=<uuid>
+  company-people id=<uuid>
+  deals [limit=...]
+  deal-get id=<uuid>
+  deal-people id=<uuid>
+  deal-companies id=<uuid>
+  notes [limit=...]
+  timeline entity_type=person|company|deal entity_id=<uuid>
+  search q=<text>
+  tags
+  workspaces
+  workspace-entities id=<uuid> [entity_type=person|company|deal|task]
+  tasks [status=...]
   dashboard
-  email-accounts | email-account-create name=Work email=me@example.com imap_host=... smtp_host=... secret=... | email-account-test ... | email-account-update id=<uuid> ... | email-account-delete id=<uuid>
+  email-accounts
+  assistant-conversations
+  suggestions [status=open]
+  audit-logs [limit=... offset=...]
+
+Mutating commands:
+  magic-link email=you@example.com
+  organization-create name=...
+  organization-member-update id=<org> user_id=<user> role=admin|member
+  organization-member-remove id=<org> user_id=<user>
+  organization-invite id=<org> email=... role=member|admin
+  organization-invitation-resend id=<org> invitation_id=<uuid>
+  invitation-accept token=<token>
+  person-create [workspace_id=<uuid>] first_name=... last_name=... email=...
+  person-update id=<uuid> ...
+  person-delete id=<uuid>
+  company-create [workspace_id=<uuid>] name=... domain=...
+  company-update id=<uuid> ...
+  company-delete id=<uuid>
+  deal-create name=... [workspace_id=<uuid>] [stage=...] [value_cents=...] [currency=...]
+  deal-update id=<uuid> ...
+  deal-delete id=<uuid>
+  link-person-company person_id=<uuid> company_id=<uuid> [role=...]
+  unlink-person-company person_id=<uuid> company_id=<uuid>
+  link-deal-person deal_id=<uuid> person_id=<uuid>
+  unlink-deal-person deal_id=<uuid> person_id=<uuid>
+  link-deal-company deal_id=<uuid> company_id=<uuid>
+  unlink-deal-company deal_id=<uuid> company_id=<uuid>
+  activity-create '{"activity":{"type":"note","body":"..."},"links":[...]}'
+  activity-update id=<uuid> type=note|call|meeting|email body=... occurred_at=...
+  activity-delete id=<uuid>
+  note-update id=<uuid> body=... occurred_at=...
+  note-delete id=<uuid>
+  tag-create name=... [color=...]
+  tag-attach tag_id=<uuid> entity_type=person|company|deal entity_id=<uuid>
+  workspace-create name=... [description=...]
+  workspace-link workspace_id=<uuid> entity_type=person|company|deal|task entity_id=<uuid>
+  task-create workspace_id=<uuid> entity_type=person|company|deal entity_id=<uuid> title=... [due=...]
+  task-update id=<uuid> ...
+  task-complete id=<uuid>
+  task-delete id=<uuid>
+  email-account-create name=... email=... imap_host=... smtp_host=... secret=...
+  email-account-test name=... email=... imap_host=... smtp_host=... secret=...
+  email-account-update id=<uuid> ...
+  email-account-delete id=<uuid>
   email-sync [limit=...]
-  assistant-conversations | audit-logs [limit=... offset=...]
-  suggestions [status=open] | suggestion-create kind=follow_up entity_type=person entity_id=<uuid> context="..."
-  suggestion-accept id=<uuid> | suggestion-link-person id=<uuid> person_id=<uuid> | suggestion-link-company id=<uuid> company_id=<uuid>
-  suggestion-dismiss id=<uuid> | suggestion-suppress id=<uuid>`)
+  suggestion-create kind=follow_up entity_type=person|company|deal entity_id=<uuid> context=...
+  suggestion-accept id=<uuid>
+  suggestion-link-person id=<uuid> person_id=<uuid>
+  suggestion-link-company id=<uuid> company_id=<uuid>
+  suggestion-dismiss id=<uuid>
+  suggestion-suppress id=<uuid>`)
 }
 
-func runAuth(args []string, base string) {
-	usage := "usage: crmctl auth set [--api <url>] <api-token> | auth show | auth clear"
+func runAuth(args []string) {
+	usage := "usage: crmctl auth set --api <url> <api-token> | auth show | auth clear"
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)
 	}
 	switch args[0] {
 	case "set":
-		token, api := "", base
+		token, api := "", ""
 		for i := 1; i < len(args); i++ {
 			if args[i] == "--api" && i+1 < len(args) {
 				api = args[i+1]
@@ -271,6 +348,9 @@ func runAuth(args []string, base string) {
 				token = args[i]
 			}
 		}
+		if api == "" {
+			fatal(fmt.Errorf("--api is required"))
+		}
 		if token == "" {
 			fatal(fmt.Errorf("token is required"))
 		}
@@ -283,6 +363,12 @@ func runAuth(args []string, base string) {
 		}
 		fmt.Printf("Token saved for %s.\n", api)
 	case "show":
+		base, baseErr := apiBase()
+		if baseErr != nil {
+			fmt.Println("Server address: not configured")
+			fmt.Println("Token: not configured")
+			return
+		}
 		token, source := apiToken(base)
 		fmt.Printf("Server address: %s\n", base)
 		if token == "" {
@@ -291,8 +377,10 @@ func runAuth(args []string, base string) {
 		}
 		fmt.Printf("Token: %s (%s)\n", maskToken(token), source)
 	case "clear":
-		if err := clearAPIToken(base); err != nil {
-			fatal(err)
+		if base, err := apiBase(); err == nil {
+			if err := clearAPIToken(base); err != nil {
+				fatal(err)
+			}
 		}
 		if err := clearDefaultAPI(); err != nil {
 			fatal(err)
@@ -304,14 +392,15 @@ func runAuth(args []string, base string) {
 	}
 }
 
-func apiBase() string {
+func apiBase() (string, error) {
+	saved, err := os.ReadFile(defaultAPIFile())
+	if err != nil || strings.TrimSpace(string(saved)) == "" {
+		return "", fmt.Errorf("crmctl is not configured; run: crmctl auth set --api <url> <api-token>")
+	}
 	if base := os.Getenv("CRME_API"); base != "" {
-		return strings.TrimRight(base, "/")
+		return strings.TrimRight(base, "/"), nil
 	}
-	if base, err := os.ReadFile(defaultAPIFile()); err == nil && strings.TrimSpace(string(base)) != "" {
-		return strings.TrimRight(strings.TrimSpace(string(base)), "/")
-	}
-	return "http://localhost:8080"
+	return strings.TrimRight(strings.TrimSpace(string(saved)), "/"), nil
 }
 
 func setAuthHeaders(req *http.Request, base string) {

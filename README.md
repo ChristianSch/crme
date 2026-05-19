@@ -80,11 +80,17 @@ AI is behind a port. The first adapter is OpenRouter; set `OPENROUTER_API_KEY` t
 
 ## CLI
 
+`crmctl` does not have a default server. Create an API token in the web app, then save the server and token:
+
 ```bash
-# BOOTSTRAP_OWNER_EMAIL must match this email for the first user.
-go run ./cmd/crmctl magic-link email=you@example.com
-# For CLI use, open the logged magic link with &format=json and copy the session id into CRME_SESSION.
-export CRME_SESSION=<session-id>
+go run ./cmd/crmctl auth set --api http://localhost:8080 <api-token>
+go run ./cmd/crmctl auth show
+```
+
+`auth set` saves the server address and token locally. On macOS it uses Keychain when available. `crmctl` authenticates with `CRME_TOKEN` first, then the saved token, then `CRME_SESSION` as a fallback.
+
+```bash
+go run ./cmd/crmctl me
 go run ./cmd/crmctl people
 go run ./cmd/crmctl person-create first_name=Ada last_name=Lovelace email=ada@example.com
 # set CRME_SECRET_KEY on the server first (openssl rand -base64 32)
@@ -95,7 +101,7 @@ go run ./cmd/crmctl suggestions status=open
 go run ./cmd/crmctl dashboard
 ```
 
-`CRME_API` overrides the API URL for the CLI. `CRME_SESSION` is sent as `X-CRM-Session`.
+For first-user bootstrap, `BOOTSTRAP_OWNER_EMAIL` must match the email used in the magic-link flow. `CRME_API` overrides the saved API URL for a shell/session.
 
 ## Architecture
 

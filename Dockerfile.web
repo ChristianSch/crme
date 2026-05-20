@@ -25,4 +25,4 @@ COPY --from=build /app/.next /app/.next
 COPY --from=build /app/public /app/public
 
 EXPOSE 3000
-CMD ["bun", "run", "start"]
+CMD ["bun", "run", "start", "--", "--hostname", "0.0.0.0", "--port", "3000"]

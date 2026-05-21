@@ -26,6 +26,7 @@ type AIService struct {
 	Todos         ports.TodoStore
 	Emails        ports.EmailMessageStore
 	AI            ports.AICompleter
+	AgentTracer   ports.AgentTracer
 }
 
 func (s AIService) DraftPrompt(ctx context.Context, kind domain.AIPromptKind, entityType domain.EntityType, entityID domain.ID, contextText string) (domain.AIPrompt, error) {
@@ -122,7 +123,15 @@ func conversationTitle(messages []domain.AIMessage) string {
 	return "Assistant conversation"
 }
 
-func (s AIService) Chat(ctx context.Context, messages []domain.AIMessage) (domain.AICompletion, error) {
+func (s AIService) Chat(ctx context.Context, messages []domain.AIMessage) (out domain.AICompletion, err error) {
+	chatStarted := time.Now().UTC()
+	trace := ports.AgentTrace{}
+	if s.AgentTracer != nil {
+		trace = s.AgentTracer.StartChat(ctx, ports.AgentChatStart{MessageCount: len(messages), StartedAt: chatStarted})
+		defer func() {
+			s.AgentTracer.EndChat(ctx, trace, ports.AgentChatEnd{Output: out, Error: err, EndedAt: time.Now().UTC(), Duration: time.Since(chatStarted)})
+		}()
+	}
 	if len(messages) == 0 {
 		return domain.AICompletion{}, fmt.Errorf("at least one message is required")
 	}
@@ -137,7 +146,12 @@ func (s AIService) Chat(ctx context.Context, messages []domain.AIMessage) (domai
 
 	agentMessages := append([]domain.AIMessage(nil), messages...)
 	for i := 0; i < 6; i++ {
-		completion, err := s.AI.Complete(ctx, domain.AICompletionRequest{System: assistantSystemPrompt(time.Now()), Messages: agentMessages})
+		req := domain.AICompletionRequest{System: assistantSystemPrompt(time.Now()), Messages: agentMessages}
+		llmStarted := time.Now().UTC()
+		completion, err := s.AI.Complete(ctx, req)
+		if s.AgentTracer != nil {
+			s.AgentTracer.RecordLLM(ctx, trace, ports.AgentLLMEvent{Iteration: i, Request: req, Output: completion, Error: err, StartedAt: llmStarted, Duration: time.Since(llmStarted)})
+		}
 		if err != nil {
 			return domain.AICompletion{}, err
 		}
@@ -147,9 +161,13 @@ func (s AIService) Chat(ctx context.Context, messages []domain.AIMessage) (domai
 		}
 		resp = normalizeAssistantAgentResponse(resp)
 		if resp.Type == "tool_call" {
-			result, err := s.runAssistantReadTool(ctx, resp.Tool, resp.Args)
-			if err != nil {
-				result = map[string]any{"error": err.Error()}
+			toolStarted := time.Now().UTC()
+			result, toolErr := s.runAssistantReadTool(ctx, resp.Tool, resp.Args)
+			if s.AgentTracer != nil {
+				s.AgentTracer.RecordTool(ctx, trace, ports.AgentToolEvent{Iteration: i, Tool: resp.Tool, Args: resp.Args, Result: result, Error: toolErr, StartedAt: toolStarted, Duration: time.Since(toolStarted)})
+			}
+			if toolErr != nil {
+				result = map[string]any{"error": toolErr.Error()}
 			}
 			requestJSON, _ := json.Marshal(resp)
 			resultJSON, _ := json.Marshal(result)
@@ -850,6 +868,12 @@ func jsonObjectsInText(text string) []string {
 }
 
 func (s AIService) ExecuteAction(ctx context.Context, action domain.AIAction) (out any, err error) {
+	started := time.Now().UTC()
+	defer func() {
+		if s.AgentTracer != nil {
+			s.AgentTracer.RecordAction(ctx, ports.AgentTrace{}, ports.AgentActionEvent{Command: action.Command, Args: action.Args, Result: out, Error: err, StartedAt: started, Duration: time.Since(started)})
+		}
+	}()
 	if !allowedAssistantAction(action.Command) {
 		return nil, fmt.Errorf("unsupported assistant action %q", action.Command)
 	}

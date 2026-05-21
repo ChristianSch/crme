@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 
 	"crme/internal/authctx"
 	"crme/internal/domain"
+	"crme/internal/requestctx"
 	"crme/internal/usecase"
 
 	"github.com/jackc/pgx/v5"
@@ -135,8 +137,9 @@ func (a API) loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		requestID := requestID(r)
 		w.Header().Set("X-Request-ID", requestID)
+		ctx := requestctx.WithRequestID(r.Context(), requestID)
 		lrw := &loggingResponseWriter{ResponseWriter: w, status: http.StatusOK}
-		next.ServeHTTP(lrw, r)
+		next.ServeHTTP(lrw, r.WithContext(ctx))
 		slog.InfoContext(r.Context(), "http request",
 			"request_id", requestID,
 			"method", r.Method,
@@ -1383,13 +1386,23 @@ func (a API) chatAI(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	out, e := a.AI.Chat(r.Context(), in.Messages)
+	conversationID := in.ConversationID
+	if conversationID == "" {
+		var e error
+		conversationID, e = newUUID()
+		if err(w, e) {
+			return
+		}
+	}
+	ctx := requestctx.WithSessionID(r.Context(), string(a.sessionID(r)))
+	ctx = requestctx.WithAssistantConversationID(ctx, string(conversationID))
+	out, e := a.AI.Chat(ctx, in.Messages)
 	if err(w, e) {
 		return
 	}
 	conversationMessages := append([]domain.AIMessage(nil), in.Messages...)
 	conversationMessages = append(conversationMessages, domain.AIMessage{Role: "assistant", Content: assistantStoredMessageContent(out)})
-	conversation, e := a.AI.SaveConversation(r.Context(), domain.AssistantConversation{ID: in.ConversationID, SessionID: a.sessionID(r), Messages: conversationMessages, PendingAction: out.PendingAction})
+	conversation, e := a.AI.SaveConversation(ctx, domain.AssistantConversation{ID: conversationID, SessionID: a.sessionID(r), Messages: conversationMessages, PendingAction: out.PendingAction})
 	if err(w, e) {
 		return
 	}
@@ -1397,6 +1410,16 @@ func (a API) chatAI(w http.ResponseWriter, r *http.Request) {
 		domain.AICompletion
 		ConversationID domain.ID `json:"conversation_id"`
 	}{AICompletion: out, ConversationID: conversation.ID})
+}
+
+func newUUID() (domain.ID, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return domain.ID(fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])), nil
 }
 
 func assistantStoredMessageContent(out domain.AICompletion) string {

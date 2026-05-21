@@ -22,6 +22,10 @@ type Config struct {
 	ResendDomain         string
 	OpenRouterAPIKey     string
 	OpenRouterModel      string
+	LangSmithAPIKey      string
+	LangSmithProject     string
+	LangSmithEndpoint    string
+	AgentTraceContent    string
 	SecretKey            string
 	EmailSyncInterval    string
 	HousekeepingInterval string
@@ -46,6 +50,10 @@ func Load() Config {
 		ResendDomain:         env("RESEND_DOMAIN", ""),
 		OpenRouterAPIKey:     env("OPENROUTER_API_KEY", ""),
 		OpenRouterModel:      env("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
+		LangSmithAPIKey:      envFirst([]string{"LANGSMITH_API_KEY", "LANGCHAIN_API_KEY"}, ""),
+		LangSmithProject:     envFirst([]string{"LANGSMITH_PROJECT", "LANGCHAIN_PROJECT"}, "crme"),
+		LangSmithEndpoint:    envFirst([]string{"LANGSMITH_ENDPOINT", "LANGCHAIN_ENDPOINT"}, "https://api.smith.langchain.com"),
+		AgentTraceContent:    env("AGENT_TRACE_CONTENT", "metadata"),
 		SecretKey:            env("CRME_SECRET_KEY", ""),
 		EmailSyncInterval:    env("EMAIL_SYNC_INTERVAL", ""),
 		HousekeepingInterval: env("HOUSEKEEPING_INTERVAL", "1h"),
@@ -67,12 +75,24 @@ func (c Config) Validate() error {
 	if c.LogFormat != "text" && c.LogFormat != "json" {
 		return fmt.Errorf("LOG_FORMAT must be text or json")
 	}
+	if c.AgentTraceContent != "" && c.AgentTraceContent != "none" && c.AgentTraceContent != "metadata" && c.AgentTraceContent != "full" {
+		return fmt.Errorf("AGENT_TRACE_CONTENT must be none, metadata, or full")
+	}
 	return nil
 }
 
 func env(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func envFirst(keys []string, fallback string) string {
+	for _, key := range keys {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
 	}
 	return fallback
 }

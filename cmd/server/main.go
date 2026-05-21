@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"time"
 
+	"crme/internal/adapters/agenttrace"
 	"crme/internal/adapters/ai"
 	emailadapter "crme/internal/adapters/email"
 	"crme/internal/adapters/httpapi"
@@ -42,6 +43,11 @@ func main() {
 	if cfg.OpenRouterAPIKey != "" {
 		aiAdapter = ai.OpenRouter{APIKey: cfg.OpenRouterAPIKey, Model: cfg.OpenRouterModel}
 	}
+	var agentTracer ports.AgentTracer
+	if cfg.LangSmithAPIKey != "" {
+		agentTracer = agenttrace.LangSmith{APIKey: cfg.LangSmithAPIKey, Project: cfg.LangSmithProject, Endpoint: cfg.LangSmithEndpoint, Environment: cfg.AppEnv, ContentMode: cfg.AgentTraceContent}
+		slog.Info("agent tracing enabled", "provider", "langsmith", "project", cfg.LangSmithProject, "content", cfg.AgentTraceContent)
+	}
 	var secretBox *secrets.Box
 	if cfg.SecretKey != "" {
 		secretBox, err = secrets.NewBox(cfg.SecretKey)
@@ -70,7 +76,7 @@ func main() {
 		MagicLinkEmailLimiter: httpapi.NewMemoryRateLimiter(time.Hour, 5),
 		MagicLinkIPLimiter:    httpapi.NewMemoryRateLimiter(time.Hour, 20),
 		CRM:                   usecase.CRMService{UOW: store, People: store, Companies: store, Deals: store, Relationships: store, Activities: store, Tags: store, Workspaces: store, SearchStore: store, Todos: store},
-		AI:                    usecase.AIService{UOW: store, Prompts: store, Conversations: store, People: store, Companies: store, Deals: store, Relationships: store, Activities: store, Tags: store, Workspaces: store, Search: store, Todos: store, Emails: store, AI: aiAdapter},
+		AI:                    usecase.AIService{UOW: store, Prompts: store, Conversations: store, People: store, Companies: store, Deals: store, Relationships: store, Activities: store, Tags: store, Workspaces: store, Search: store, Todos: store, Emails: store, AI: aiAdapter, AgentTracer: agentTracer},
 		Suggestions:           usecase.SuggestionService{UOW: store, Prompts: store, People: store, Companies: store, Relationships: store, Activities: store, Emails: store},
 		Email:                 emailService,
 		Audit:                 usecase.AuditService{Store: store},

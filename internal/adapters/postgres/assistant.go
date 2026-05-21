@@ -48,7 +48,10 @@ func (s *Store) UpsertAssistantConversation(ctx context.Context, c domain.Assist
 		err = s.queryRow(ctx, `insert into assistant_conversations (organization_id,session_id,title,messages,pending_action) values ($1::uuid,$2,$3,$4,$5) returning id, created_at, updated_at`, organizationID(ctx), c.SessionID, c.Title, raw, rawAction).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt)
 		return c, err
 	}
-	err = s.queryRow(ctx, `update assistant_conversations set title=$4, messages=$5, pending_action=$6, updated_at=now() where id=$1 and session_id=$2 and organization_id=$3::uuid returning created_at, updated_at`, c.ID, c.SessionID, organizationID(ctx), c.Title, raw, rawAction).Scan(&c.CreatedAt, &c.UpdatedAt)
+	err = s.queryRow(ctx, `insert into assistant_conversations (id,organization_id,session_id,title,messages,pending_action) values ($1,$2::uuid,$3,$4,$5,$6)
+	on conflict (id) do update set title=excluded.title, messages=excluded.messages, pending_action=excluded.pending_action, updated_at=now()
+	where assistant_conversations.session_id=excluded.session_id and assistant_conversations.organization_id=excluded.organization_id
+	returning created_at, updated_at`, c.ID, organizationID(ctx), c.SessionID, c.Title, raw, rawAction).Scan(&c.CreatedAt, &c.UpdatedAt)
 	return c, err
 }
 

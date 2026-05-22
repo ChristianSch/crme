@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, CalendarClock, CheckCircle2, Pencil, Plus, RotateCcw, Save, Trash2, X, NotebookText, UserRound } from "lucide-react";
+import { Building2, CalendarClock, CheckCircle2, Handshake, Pencil, Plus, RotateCcw, Save, Trash2, X, NotebookText, UserRound } from "lucide-react";
 
 import { ActivityCard, ActivityComposer } from "@/components/activity/activity-components";
 import { ConfirmAction } from "@/components/common/confirm-action";
@@ -12,13 +12,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { api, Company, fullName, Person, TimelineItem, Todo } from "@/lib/api";
+import { api, Company, Deal, fullName, Person, TimelineItem, Todo } from "@/lib/api";
 import { firstUsefulLine, relativeDate } from "@/lib/format";
 
 export function CompanySheet({
   company,
   onOpenChange,
   people,
+  deals,
   tasks,
   timeline,
   workspaceId,
@@ -27,10 +28,12 @@ export function CompanySheet({
   onSaved,
   onDeleted,
   onSelectPerson,
+  onSelectDeal,
 }: {
   company: Company | null;
   onOpenChange: (open: boolean) => void;
   people: Person[];
+  deals: Deal[];
   tasks: Todo[];
   timeline: TimelineItem[];
   workspaceId: string;
@@ -39,6 +42,7 @@ export function CompanySheet({
   onSaved: (company: Company) => void;
   onDeleted: () => void;
   onSelectPerson: (person: Person) => void;
+  onSelectDeal: (deal: Deal) => void;
 }) {
   const [editingId, setEditingId] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -54,6 +58,7 @@ export function CompanySheet({
     setDrafts((current) => ({ ...current, [next.id]: next }));
   };
   const relatedPeople = company ? people : [];
+  const relatedDeals = company ? deals : [];
   const relatedTasks = company ? tasks.filter((task) => task.entity_type === "company" && task.entity_id === company.id) : [];
   const activities = timeline.filter((item) => item.kind === "activity" || item.type);
 
@@ -164,6 +169,18 @@ export function CompanySheet({
                         <div className="mt-0.5 truncate text-xs text-muted-foreground">{person.email || "No email"}</div>
                       </button>
                     )) : <p className="text-sm text-muted-foreground">No linked people loaded.</p>}
+                  </div>
+                </section>
+                <Separator />
+                <section>
+                  <SectionTitle icon={<Handshake className="size-4" />} title="Deals" />
+                  <div className="mt-3 divide-y border-y">
+                    {relatedDeals.length ? relatedDeals.map((deal) => (
+                      <button key={deal.id} type="button" className="w-full py-3 text-left hover:bg-muted/30" onClick={() => onSelectDeal(deal)}>
+                        <div className="truncate text-sm font-medium underline-offset-4 hover:underline">{deal.name || "Unnamed deal"}</div>
+                        <div className="mt-0.5 truncate text-xs text-muted-foreground">{deal.stage || "No stage"}</div>
+                      </button>
+                    )) : <p className="text-sm text-muted-foreground">No linked deals loaded.</p>}
                   </div>
                 </section>
                 <Separator />

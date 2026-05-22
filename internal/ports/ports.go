@@ -102,6 +102,7 @@ type DealStore interface {
 	LinkDealCompany(ctx context.Context, dealID, companyID domain.ID) error
 	UnlinkDealCompany(ctx context.Context, dealID, companyID domain.ID) error
 	ListCompaniesForDeal(ctx context.Context, dealID domain.ID, limit int) ([]domain.Company, error)
+	ListDealsForCompany(ctx context.Context, companyID domain.ID, limit int) ([]domain.Deal, error)
 }
 
 type RelationshipStore interface {

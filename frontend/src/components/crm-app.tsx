@@ -74,6 +74,7 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
   const [createType, setCreateType] = useState<CreateRecordType | null>(null);
   const [selectedPersonCompanies, setSelectedPersonCompanies] = useState<Company[]>([]);
   const [selectedCompanyPeople, setSelectedCompanyPeople] = useState<Person[]>([]);
+  const [selectedCompanyDeals, setSelectedCompanyDeals] = useState<Deal[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [companyTimeline, setCompanyTimeline] = useState<TimelineItem[]>([]);
   const [dealTimeline, setDealTimeline] = useState<TimelineItem[]>([]);
@@ -245,21 +246,25 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
       if (!selectedCompany) {
         setCompanyTimeline([]);
         setSelectedCompanyPeople([]);
+        setSelectedCompanyDeals([]);
         return;
       }
       try {
-        const [items, linkedPeople] = await Promise.all([
+        const [items, linkedPeople, linkedDeals] = await Promise.all([
           api.timeline("company", selectedCompany.id),
           api.companyPeople(selectedCompany.id),
+          api.companyDeals(selectedCompany.id),
         ]);
         if (!cancelled) {
           setCompanyTimeline(items ?? []);
           setSelectedCompanyPeople(linkedPeople ?? []);
+          setSelectedCompanyDeals(linkedDeals ?? []);
         }
       } catch {
         if (!cancelled) {
           setCompanyTimeline([]);
           setSelectedCompanyPeople([]);
+          setSelectedCompanyDeals([]);
         }
       }
     }
@@ -499,6 +504,7 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
         company={selectedCompany}
         onOpenChange={(open) => !open && setSelectedCompany(null)}
         people={selectedCompanyPeople}
+        deals={selectedCompanyDeals}
         tasks={tasks}
         workspaceId={workspaceId}
         timeline={companyTimeline}
@@ -516,6 +522,7 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
           void loadData();
         }}
         onSelectPerson={openPerson}
+        onSelectDeal={openDeal}
       />
       <DealSheet
         deal={selectedDeal}

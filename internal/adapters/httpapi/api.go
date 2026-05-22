@@ -76,6 +76,7 @@ func (a API) Handler() http.Handler {
 	mux.HandleFunc("PATCH /companies/{id}", a.updateCompany)
 	mux.HandleFunc("DELETE /companies/{id}", a.deleteCompany)
 	mux.HandleFunc("GET /companies/{id}/people", a.listCompanyPeople)
+	mux.HandleFunc("GET /companies/{id}/deals", a.listCompanyDeals)
 	mux.HandleFunc("GET /deals", a.listDeals)
 	mux.HandleFunc("POST /deals", a.createDeal)
 	mux.HandleFunc("GET /deals/{id}", a.getDeal)
@@ -816,6 +817,13 @@ func (a API) deleteCompany(w http.ResponseWriter, r *http.Request) {
 }
 func (a API) listCompanyPeople(w http.ResponseWriter, r *http.Request) {
 	out, e := a.CRM.ListPeopleForCompany(r.Context(), domain.ID(r.PathValue("id")), limit(r))
+	if err(w, e) {
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+func (a API) listCompanyDeals(w http.ResponseWriter, r *http.Request) {
+	out, e := a.CRM.ListDealsForCompany(r.Context(), domain.ID(r.PathValue("id")), limit(r))
 	if err(w, e) {
 		return
 	}

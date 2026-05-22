@@ -294,6 +294,22 @@ func (s *Store) ListCompaniesForDeal(ctx context.Context, dealID domain.ID, limi
 	}
 	return out, rows.Err()
 }
+func (s *Store) ListDealsForCompany(ctx context.Context, companyID domain.ID, limit int) ([]domain.Deal, error) {
+	rows, err := s.query(ctx, `select d.id, coalesce(d.workspace_id::text,''), d.name, d.stage, d.value_cents, d.currency, d.created_at, d.updated_at from deals d join deal_companies dc on dc.deal_id=d.id where dc.company_id=$1 and d.organization_id=$3::uuid order by d.updated_at desc limit $2`, companyID, limit, organizationID(ctx))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.Deal
+	for rows.Next() {
+		var d domain.Deal
+		if err := rows.Scan(&d.ID, &d.WorkspaceID, &d.Name, &d.Stage, &d.ValueCents, &d.Currency, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
 func (s *Store) LinkActivity(ctx context.Context, activityID domain.ID, entityType domain.EntityType, entityID domain.ID) error {
 	_, err := s.exec(ctx, `insert into activity_links (organization_id,activity_id,entity_type,entity_id) values ($1::uuid,$2,$3,$4) on conflict do nothing`, organizationID(ctx), activityID, entityType, entityID)
 	return err

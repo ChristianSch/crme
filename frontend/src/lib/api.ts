@@ -435,6 +435,9 @@ export const api = {
   companyPeople(companyId: ID) {
     return request<Person[]>(`/companies/${companyId}/people?limit=100`);
   },
+  companyDeals(companyId: ID) {
+    return request<Deal[]>(`/companies/${companyId}/deals?limit=100`);
+  },
   deletePerson(id: ID) {
     return request<{ status: string }>(`/people/${id}`, { method: "DELETE" });
   },

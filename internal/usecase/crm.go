@@ -253,6 +253,9 @@ func (s CRMService) UnlinkDealCompany(ctx context.Context, dealID, companyID dom
 func (s CRMService) ListCompaniesForDeal(ctx context.Context, dealID domain.ID, limit int) ([]domain.Company, error) {
 	return s.Deals.ListCompaniesForDeal(ctx, dealID, saneLimit(limit))
 }
+func (s CRMService) ListDealsForCompany(ctx context.Context, companyID domain.ID, limit int) ([]domain.Deal, error) {
+	return s.Deals.ListDealsForCompany(ctx, companyID, saneLimit(limit))
+}
 func (s CRMService) GetActivity(ctx context.Context, id domain.ID) (domain.Activity, error) {
 	return s.Activities.GetActivity(ctx, id)
 }

@@ -19,6 +19,7 @@ type EmailService struct {
 	Messages       ports.EmailMessageStore
 	People         ports.PersonStore
 	Companies      ports.CompanyStore
+	Deals          ports.DealStore
 	Activities     ports.ActivityStore
 	Prompts        ports.AIPromptStore
 	Secrets        ports.RuntimeSecretStore
@@ -26,6 +27,7 @@ type EmailService struct {
 	Box            *secrets.Box
 	SecretResolver ports.SecretResolver
 	Fetcher        ports.MailFetcher
+	FolderLister   ports.MailFolderLister
 	Tester         ports.EmailAccountTester
 }
 
@@ -175,6 +177,7 @@ func (s EmailService) withStores(stores ports.Stores) EmailService {
 	s.Messages = stores.EmailMessages
 	s.People = stores.People
 	s.Companies = stores.Companies
+	s.Deals = stores.Deals
 	s.Activities = stores.Activities
 	s.Prompts = stores.Prompts
 	return s
@@ -199,34 +202,86 @@ func (s EmailService) SyncAccounts(ctx context.Context, limit int) (EmailSyncRep
 			report.Errors = append(report.Errors, fmt.Sprintf("%s: %v", account.Email, err))
 			continue
 		}
-		since := time.Time{}
-		if account.LastSyncedAt != nil {
-			since = *account.LastSyncedAt
+		folders := []string{"INBOX"}
+		if s.FolderLister != nil {
+			available, err := s.FolderLister.ListMailFolders(ctx, account, secret)
+			if err != nil {
+				report.Errors = append(report.Errors, fmt.Sprintf("%s: list folders: %v", account.Email, err))
+			} else {
+				folders = syncFolders(available)
+			}
 		}
-		messages, err := s.Fetcher.FetchNewMessages(ctx, account, secret, since, 100)
+		cursors, err := s.Accounts.ListEmailSyncCursors(accountCtx, account.ID)
 		if err != nil {
-			report.Errors = append(report.Errors, fmt.Sprintf("%s: %v", account.Email, err))
+			report.Errors = append(report.Errors, fmt.Sprintf("%s: cursors: %v", account.Email, err))
 			continue
 		}
-		for _, m := range messages {
-			created, linked, suggestions, err := s.processFetchedMessage(accountCtx, account, m)
+		cursorByFolder := map[string]time.Time{}
+		for _, cursor := range cursors {
+			cursorByFolder[cursor.Folder] = cursor.LastSyncedAt
+		}
+		for _, folder := range folders {
+			since := cursorByFolder[folder]
+			messages, err := s.Fetcher.FetchNewMessages(ctx, account, secret, folder, since, 100)
 			if err != nil {
-				report.Errors = append(report.Errors, fmt.Sprintf("%s: process %s: %v", account.Email, m.MessageID, err))
+				report.Errors = append(report.Errors, fmt.Sprintf("%s/%s: %v", account.Email, folder, err))
 				continue
 			}
-			if created {
-				report.NewMessages++
+			for _, m := range messages {
+				created, linked, suggestions, err := s.processFetchedMessage(accountCtx, account, m)
+				if err != nil {
+					report.Errors = append(report.Errors, fmt.Sprintf("%s: process %s: %v", account.Email, m.MessageID, err))
+					continue
+				}
+				if created {
+					report.NewMessages++
+				}
+				if linked {
+					report.LinkedMessages++
+				}
+				report.Suggestions += suggestions
 			}
-			if linked {
-				report.LinkedMessages++
+			if err := s.Accounts.MarkEmailFolderSynced(accountCtx, account, folder, time.Now().UTC()); err != nil {
+				report.Errors = append(report.Errors, fmt.Sprintf("%s/%s: mark synced: %v", account.Email, folder, err))
 			}
-			report.Suggestions += suggestions
 		}
 		if err := s.Accounts.MarkEmailAccountSynced(accountCtx, account.ID, time.Now().UTC()); err != nil {
 			report.Errors = append(report.Errors, fmt.Sprintf("%s: mark synced: %v", account.Email, err))
 		}
 	}
 	return report, nil
+}
+
+func syncFolders(available []string) []string {
+	selected := []string{}
+	add := func(folder string) {
+		folder = strings.TrimSpace(folder)
+		if folder == "" {
+			return
+		}
+		for _, existing := range selected {
+			if strings.EqualFold(existing, folder) {
+				return
+			}
+		}
+		selected = append(selected, folder)
+	}
+	for _, folder := range available {
+		if strings.EqualFold(folder, "INBOX") {
+			add(folder)
+		}
+	}
+	if len(selected) == 0 {
+		add("INBOX")
+	}
+	for _, wanted := range []string{"[Gmail]/Sent Mail", "Sent", "Sent Mail", "Sent Items", "INBOX.Sent"} {
+		for _, folder := range available {
+			if strings.EqualFold(folder, wanted) {
+				add(folder)
+			}
+		}
+	}
+	return selected
 }
 
 func (s EmailService) processFetchedMessage(ctx context.Context, account domain.EmailAccount, m domain.EmailMessage) (bool, bool, int, error) {
@@ -252,7 +307,7 @@ func (s EmailService) processFetchedMessageNoTx(ctx context.Context, account dom
 	if !created {
 		return false, false, 0, nil
 	}
-	linked, err := s.linkEmailToTimeline(ctx, account, m)
+	linked, dealSuggestions, err := s.linkEmailToTimeline(ctx, account, m)
 	if err != nil {
 		return false, false, 0, err
 	}
@@ -260,33 +315,22 @@ func (s EmailService) processFetchedMessageNoTx(ctx context.Context, account dom
 	if err != nil {
 		return false, false, 0, err
 	}
-	return true, linked, suggestions, nil
+	return true, linked, suggestions + dealSuggestions, nil
 }
 
-func (s EmailService) linkEmailToTimeline(ctx context.Context, account domain.EmailAccount, m domain.EmailMessage) (bool, error) {
+func (s EmailService) linkEmailToTimeline(ctx context.Context, account domain.EmailAccount, m domain.EmailMessage) (bool, int, error) {
 	links := map[string]domain.ActivityLink{}
-	touchPeople := map[domain.ID]time.Time{}
-	touchCompanies := map[domain.ID]time.Time{}
+	matchedPeople := map[domain.ID]domain.Person{}
 	for _, email := range relevantEmails(account, m) {
 		if person, found, err := s.People.FindPersonByEmail(ctx, email); err != nil {
-			return false, err
+			return false, 0, err
 		} else if found {
 			links["person:"+string(person.ID)] = domain.ActivityLink{EntityType: domain.EntityPerson, EntityID: person.ID}
-			touchPeople[person.ID] = m.SentAt
-		}
-		domainName := emailDomain(email)
-		if domainName == "" || isPersonalEmailDomain(domainName) {
-			continue
-		}
-		if company, found, err := s.Companies.FindCompanyByDomain(ctx, domainName); err != nil {
-			return false, err
-		} else if found {
-			links["company:"+string(company.ID)] = domain.ActivityLink{EntityType: domain.EntityCompany, EntityID: company.ID}
-			touchCompanies[company.ID] = m.SentAt
+			matchedPeople[person.ID] = person
 		}
 	}
 	if len(links) == 0 {
-		return false, nil
+		return false, 0, nil
 	}
 	activityLinks := make([]domain.ActivityLink, 0, len(links))
 	for _, l := range links {
@@ -296,27 +340,75 @@ func (s EmailService) linkEmailToTimeline(ctx context.Context, account domain.Em
 	privateBody := fullEmailActivityBody(m)
 	activity, err := s.Activities.CreateActivity(ctx, domain.Activity{Type: domain.ActivityEmail, Body: body, OccurredAt: m.SentAt}, activityLinks)
 	if err != nil {
-		return false, err
+		return false, 0, err
 	}
 	if account.OwnerUserID != "" && privateBody != "" {
 		if err := s.Activities.CreateActivityDetail(ctx, domain.ActivityDetail{ActivityID: activity.ID, OwnerUserID: account.OwnerUserID, BodyText: privateBody}); err != nil {
-			return false, err
+			return false, 0, err
 		}
 	}
 	if err := s.Messages.SetEmailMessageActivity(ctx, m.MessageID, activity.ID); err != nil {
-		return false, err
+		return false, 0, err
 	}
-	for id, at := range touchPeople {
-		if err := s.People.TouchPerson(ctx, id, at); err != nil {
-			return false, err
+	for id := range matchedPeople {
+		if err := s.People.TouchPerson(ctx, id, m.SentAt); err != nil {
+			return false, 0, err
 		}
 	}
-	for id, at := range touchCompanies {
-		if err := s.Companies.TouchCompany(ctx, id, at); err != nil {
-			return false, err
+	dealSuggestions, err := s.suggestDealLinks(ctx, m, activity.ID, matchedPeople)
+	if err != nil {
+		return false, 0, err
+	}
+	return true, dealSuggestions, nil
+}
+
+func (s EmailService) suggestDealLinks(ctx context.Context, m domain.EmailMessage, activityID domain.ID, people map[domain.ID]domain.Person) (int, error) {
+	if s.Deals == nil || s.Prompts == nil || activityID == "" || len(people) == 0 {
+		return 0, nil
+	}
+	seen := map[domain.ID]domain.Deal{}
+	for personID := range people {
+		deals, err := s.Deals.ListDealsForPerson(ctx, personID, 5)
+		if err != nil {
+			return 0, err
+		}
+		for _, deal := range deals {
+			seen[deal.ID] = deal
 		}
 	}
-	return true, nil
+	created := 0
+	for _, deal := range seen {
+		dealLabel := dealNameOrID(deal)
+		title := fmt.Sprintf("Link email to deal: %s", dealLabel)
+		if exists, err := s.Prompts.AIPromptExists(ctx, domain.PromptEmailDealLink, title, "open"); err != nil {
+			return created, err
+		} else if exists {
+			continue
+		}
+		_, err := s.Prompts.CreateAIPrompt(ctx, domain.AIPrompt{
+			Kind:             domain.PromptEmailDealLink,
+			EntityType:       domain.EntityDeal,
+			EntityID:         deal.ID,
+			TargetType:       "activity",
+			TargetIdentifier: string(activityID),
+			Title:            title,
+			Body:             fmt.Sprintf("Email %s may belong on deal %s.\nSubject: %s", strings.TrimSpace(m.Direction), dealLabel, strings.TrimSpace(m.Subject)),
+			Status:           "open",
+			LastTouchAt:      &m.SentAt,
+		})
+		if err != nil {
+			return created, err
+		}
+		created++
+	}
+	return created, nil
+}
+
+func dealNameOrID(deal domain.Deal) string {
+	if strings.TrimSpace(deal.Name) != "" {
+		return strings.TrimSpace(deal.Name)
+	}
+	return string(deal.ID)
 }
 
 func (s EmailService) suggestEntitiesFromMessage(ctx context.Context, account domain.EmailAccount, m domain.EmailMessage) (int, error) {
@@ -510,10 +602,16 @@ func isPersonalEmailDomain(domainName string) bool {
 }
 
 func sanitizedEmailActivityBody(m domain.EmailMessage) string {
-	if strings.TrimSpace(m.Subject) == "" {
-		return "Email"
+	label := "Email"
+	if m.Direction == "outbound" {
+		label = "Outbound email"
+	} else if m.Direction == "inbound" {
+		label = "Inbound email"
 	}
-	return "Subject: " + strings.TrimSpace(m.Subject)
+	if strings.TrimSpace(m.Subject) == "" {
+		return label
+	}
+	return label + "\nSubject: " + strings.TrimSpace(m.Subject)
 }
 
 func fullEmailActivityBody(m domain.EmailMessage) string {

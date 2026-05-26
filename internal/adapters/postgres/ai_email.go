@@ -186,6 +186,28 @@ func (s *Store) TouchCompany(ctx context.Context, id domain.ID, at time.Time) er
 	return err
 }
 
+func (s *Store) ListEmailSyncCursors(ctx context.Context, accountID domain.ID) ([]domain.EmailSyncCursor, error) {
+	rows, err := s.query(ctx, `select email_account_id, folder, coalesce(last_synced_at, 'epoch'::timestamptz) from email_sync_cursors where email_account_id=$1 and organization_id=$2::uuid`, accountID, organizationID(ctx))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.EmailSyncCursor
+	for rows.Next() {
+		var c domain.EmailSyncCursor
+		if err := rows.Scan(&c.EmailAccountID, &c.Folder, &c.LastSyncedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) MarkEmailFolderSynced(ctx context.Context, account domain.EmailAccount, folder string, at time.Time) error {
+	_, err := s.exec(ctx, `insert into email_sync_cursors (organization_id,owner_user_id,email_account_id,folder,last_synced_at) values ($1::uuid,$2,$3,$4,$5) on conflict (email_account_id, folder) do update set last_synced_at=excluded.last_synced_at, updated_at=now()`, organizationID(ctx), account.OwnerUserID, account.ID, folder, at)
+	return err
+}
+
 func (s *Store) MarkEmailAccountSynced(ctx context.Context, id domain.ID, at time.Time) error {
 	_, err := s.exec(ctx, `update email_accounts set last_synced_at=$2, updated_at=now() where id=$1`, id, at)
 	return err

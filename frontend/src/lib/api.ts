@@ -139,7 +139,7 @@ export type TimelineItem = {
 
 export type Suggestion = {
   id: ID;
-  kind: "new_contact" | "new_company" | "possible_merge" | "follow_up" | "deal_stage_nudge";
+  kind: "new_contact" | "new_company" | "possible_merge" | "follow_up" | "deal_stage_nudge" | "email_deal_link";
   entity_type: string;
   entity_id: ID;
   target_type?: string;

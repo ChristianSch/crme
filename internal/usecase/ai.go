@@ -885,7 +885,7 @@ func (s AIService) ExecuteAction(ctx context.Context, action domain.AIAction) (o
 
 	run := func(stores ports.Stores) (any, error) {
 		svc := CRMService{People: stores.People, Companies: stores.Companies, Deals: stores.Deals, Relationships: stores.Relationships, Activities: stores.Activities, Tags: stores.Tags, Workspaces: stores.Workspaces, Todos: stores.Todos}
-		suggestionSvc := SuggestionService{Prompts: stores.Prompts, People: stores.People, Companies: stores.Companies, Relationships: stores.Relationships, Activities: stores.Activities, Emails: stores.EmailMessages}
+		suggestionSvc := SuggestionService{Prompts: stores.Prompts, People: stores.People, Companies: stores.Companies, Deals: stores.Deals, Relationships: stores.Relationships, Activities: stores.Activities, Emails: stores.EmailMessages}
 		success := map[string]string{"status": "ok"}
 		switch action.Command {
 		case "person-create":

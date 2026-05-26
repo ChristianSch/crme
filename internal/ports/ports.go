@@ -55,7 +55,11 @@ type AdminStore interface {
 }
 
 type MailFetcher interface {
-	FetchNewMessages(ctx context.Context, account domain.EmailAccount, secret string, since time.Time, limit int) ([]domain.EmailMessage, error)
+	FetchNewMessages(ctx context.Context, account domain.EmailAccount, secret string, folder string, since time.Time, limit int) ([]domain.EmailMessage, error)
+}
+
+type MailFolderLister interface {
+	ListMailFolders(ctx context.Context, account domain.EmailAccount, secret string) ([]string, error)
 }
 
 type EmailAccountTester interface {
@@ -98,6 +102,7 @@ type DealStore interface {
 	ListDeals(ctx context.Context, query string, workspaceID domain.ID, limit, offset int) ([]domain.Deal, error)
 	LinkDealPerson(ctx context.Context, dealID, personID domain.ID) error
 	UnlinkDealPerson(ctx context.Context, dealID, personID domain.ID) error
+	ListDealsForPerson(ctx context.Context, personID domain.ID, limit int) ([]domain.Deal, error)
 	ListPeopleForDeal(ctx context.Context, dealID domain.ID, limit int) ([]domain.Person, error)
 	LinkDealCompany(ctx context.Context, dealID, companyID domain.ID) error
 	UnlinkDealCompany(ctx context.Context, dealID, companyID domain.ID) error
@@ -192,6 +197,8 @@ type EmailAccountStore interface {
 	UpdateEmailAccount(ctx context.Context, a domain.EmailAccount) (domain.EmailAccount, error)
 	DeleteEmailAccount(ctx context.Context, id domain.ID) error
 	ListSyncEnabledEmailAccounts(ctx context.Context, limit int) ([]domain.EmailAccount, error)
+	ListEmailSyncCursors(ctx context.Context, accountID domain.ID) ([]domain.EmailSyncCursor, error)
+	MarkEmailFolderSynced(ctx context.Context, account domain.EmailAccount, folder string, at time.Time) error
 	MarkEmailAccountSynced(ctx context.Context, id domain.ID, at time.Time) error
 }
 

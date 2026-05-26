@@ -241,6 +241,9 @@ func (s CRMService) LinkDealPerson(ctx context.Context, dealID, personID domain.
 func (s CRMService) UnlinkDealPerson(ctx context.Context, dealID, personID domain.ID) error {
 	return s.Deals.UnlinkDealPerson(ctx, dealID, personID)
 }
+func (s CRMService) ListDealsForPerson(ctx context.Context, personID domain.ID, limit int) ([]domain.Deal, error) {
+	return s.Deals.ListDealsForPerson(ctx, personID, saneLimit(limit))
+}
 func (s CRMService) ListPeopleForDeal(ctx context.Context, dealID domain.ID, limit int) ([]domain.Person, error) {
 	return s.Deals.ListPeopleForDeal(ctx, dealID, saneLimit(limit))
 }

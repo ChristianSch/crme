@@ -254,6 +254,22 @@ func (s *Store) UnlinkDealPerson(ctx context.Context, dealID, personID domain.ID
 	_, err := s.exec(ctx, `delete from deal_people where deal_id=$1 and person_id=$2 and organization_id=$3::uuid`, dealID, personID, organizationID(ctx))
 	return err
 }
+func (s *Store) ListDealsForPerson(ctx context.Context, personID domain.ID, limit int) ([]domain.Deal, error) {
+	rows, err := s.query(ctx, `select d.id, coalesce(d.workspace_id::text,''), d.name, d.stage, d.value_cents, d.currency, d.created_at, d.updated_at from deals d join deal_people dp on dp.deal_id=d.id where dp.person_id=$1 and d.organization_id=$3::uuid order by d.updated_at desc limit $2`, personID, limit, organizationID(ctx))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.Deal
+	for rows.Next() {
+		var d domain.Deal
+		if err := rows.Scan(&d.ID, &d.WorkspaceID, &d.Name, &d.Stage, &d.ValueCents, &d.Currency, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
 func (s *Store) ListPeopleForDeal(ctx context.Context, dealID domain.ID, limit int) ([]domain.Person, error) {
 	rows, err := s.query(ctx, `select p.id, p.first_name, p.last_name, p.email, p.phone, p.title, p.linkedin_url, p.city, coalesce(pc.company_name,''), p.status, p.source, p.my_turn, p.last_touch_at, p.created_at, p.updated_at from people p join deal_people dp on dp.person_id=p.id left join lateral (select c.name as company_name from person_companies pc join companies c on c.id=pc.company_id where pc.person_id=p.id order by c.updated_at desc limit 1) pc on true where dp.deal_id=$1 and p.organization_id=$3::uuid order by p.updated_at desc limit $2`, dealID, limit, organizationID(ctx))
 	if err != nil {

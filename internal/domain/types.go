@@ -257,6 +257,7 @@ const (
 	PromptPossibleMerge  AIPromptKind = "possible_merge"
 	PromptFollowUp       AIPromptKind = "follow_up"
 	PromptDealStageNudge AIPromptKind = "deal_stage_nudge"
+	PromptEmailDealLink  AIPromptKind = "email_deal_link"
 )
 
 type AIPrompt struct {
@@ -288,6 +289,12 @@ type EmailMessage struct {
 	BodyText       string    `json:"body_text"`
 	SentAt         time.Time `json:"sent_at"`
 	CreatedAt      time.Time `json:"created_at"`
+}
+
+type EmailSyncCursor struct {
+	EmailAccountID ID        `json:"email_account_id"`
+	Folder         string    `json:"folder"`
+	LastSyncedAt   time.Time `json:"last_synced_at"`
 }
 
 type EmailAccount struct {

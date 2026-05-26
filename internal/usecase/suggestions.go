@@ -22,6 +22,7 @@ type SuggestionService struct {
 	Prompts       ports.AIPromptStore
 	People        ports.PersonStore
 	Companies     ports.CompanyStore
+	Deals         ports.DealStore
 	Relationships ports.RelationshipStore
 	Activities    ports.ActivityStore
 	Emails        ports.EmailMessageStore
@@ -37,6 +38,9 @@ func (s SuggestionService) withStores(stores ports.Stores) SuggestionService {
 	if stores.Companies != nil {
 		s.Companies = stores.Companies
 	}
+	if stores.Deals != nil {
+		s.Deals = stores.Deals
+	}
 	if stores.Relationships != nil {
 		s.Relationships = stores.Relationships
 	}
@@ -50,7 +54,7 @@ func (s SuggestionService) withStores(stores ports.Stores) SuggestionService {
 }
 
 func (s SuggestionService) crmService() CRMService {
-	return CRMService{People: s.People, Companies: s.Companies, Relationships: s.Relationships, Activities: s.Activities}
+	return CRMService{People: s.People, Companies: s.Companies, Deals: s.Deals, Relationships: s.Relationships, Activities: s.Activities}
 }
 
 func (s SuggestionService) emailService() EmailService {
@@ -158,6 +162,23 @@ func (s SuggestionService) acceptPrompt(ctx context.Context, id domain.ID) (any,
 		}
 		_, err = s.Prompts.ResolveAIPrompt(ctx, id, "accepted")
 		return AcceptPromptResult{Result: created, Created: true, CreatedEntityType: "person", CreatedEntityID: created.ID}, err
+	case domain.PromptEmailDealLink:
+		if p.EntityType != domain.EntityDeal || p.EntityID == "" {
+			return nil, fmt.Errorf("email deal link suggestion has no deal")
+		}
+		activityID := domain.ID(suggestionValue(p))
+		if activityID == "" {
+			return nil, fmt.Errorf("email deal link suggestion has no activity")
+		}
+		if err := s.crmService().LinkActivity(ctx, activityID, domain.EntityDeal, p.EntityID); err != nil {
+			return nil, err
+		}
+		deal, err := s.Deals.GetDeal(ctx, p.EntityID)
+		if err != nil {
+			return nil, err
+		}
+		_, err = s.Prompts.ResolveAIPrompt(ctx, id, "accepted")
+		return AcceptPromptResult{Result: deal, Created: false}, err
 	case domain.PromptNewCompany:
 		domainName := suggestionValue(p)
 		if domainName == "" {
@@ -174,9 +195,6 @@ func (s SuggestionService) acceptPrompt(ctx context.Context, id domain.ID) (any,
 		company := domain.Company{Name: name, Domain: strings.ToLower(domainName)}
 		created, err := s.crmService().CreateCompany(ctx, company)
 		if err != nil {
-			return nil, err
-		}
-		if err := s.linkHistoricalEmails(ctx, domain.EntityCompany, created.ID, domainName); err != nil {
 			return nil, err
 		}
 		_, err = s.Prompts.ResolveAIPrompt(ctx, id, "accepted")
@@ -262,9 +280,6 @@ func (s SuggestionService) linkSuggestionToCompany(ctx context.Context, id domai
 		return domain.Company{}, err
 	}
 	if err := s.crmService().AddCompanyDomain(ctx, companyID, domainName, false); err != nil {
-		return domain.Company{}, err
-	}
-	if err := s.linkHistoricalEmails(ctx, domain.EntityCompany, companyID, domainName); err != nil {
 		return domain.Company{}, err
 	}
 	_, err = s.Prompts.ResolveAIPrompt(ctx, id, "accepted")

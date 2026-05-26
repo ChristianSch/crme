@@ -30,13 +30,34 @@ func (f IMAPClient) TestEmailAccount(ctx context.Context, account domain.EmailAc
 	return err
 }
 
-func (f IMAPClient) FetchNewMessages(ctx context.Context, account domain.EmailAccount, secret string, since time.Time, limit int) ([]domain.EmailMessage, error) {
+func (f IMAPClient) ListMailFolders(ctx context.Context, account domain.EmailAccount, secret string) ([]string, error) {
 	c, err := f.connect(ctx, account, secret)
 	if err != nil {
 		return nil, err
 	}
 	defer c.Logout()
-	_, err = c.Select("INBOX", true)
+	mailboxes := make(chan *imap.MailboxInfo, 32)
+	done := make(chan error, 1)
+	go func() { done <- c.List("", "*", mailboxes) }()
+	var out []string
+	for mailbox := range mailboxes {
+		if mailbox != nil {
+			out = append(out, mailbox.Name)
+		}
+	}
+	return out, <-done
+}
+
+func (f IMAPClient) FetchNewMessages(ctx context.Context, account domain.EmailAccount, secret string, folder string, since time.Time, limit int) ([]domain.EmailMessage, error) {
+	c, err := f.connect(ctx, account, secret)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Logout()
+	if strings.TrimSpace(folder) == "" {
+		folder = "INBOX"
+	}
+	_, err = c.Select(folder, true)
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +99,17 @@ func (f IMAPClient) FetchNewMessages(ctx context.Context, account domain.EmailAc
 		if r := msg.GetBody(section); r != nil {
 			body = readPlainText(r)
 		}
+		fromEmail := firstAddress(msg.Envelope.From)
+		direction := "inbound"
+		if strings.EqualFold(fromEmail, account.Email) {
+			direction = "outbound"
+		}
 		m := domain.EmailMessage{
 			EmailAccountID: account.ID,
 			MessageID:      strings.TrimSpace(msg.Envelope.MessageId),
 			ThreadKey:      threadKey(msg.Envelope),
-			Direction:      "inbound",
-			FromEmail:      firstAddress(msg.Envelope.From),
+			Direction:      direction,
+			FromEmail:      fromEmail,
 			FromName:       firstAddressName(msg.Envelope.From),
 			ToEmails:       addresses(msg.Envelope.To),
 			Subject:        msg.Envelope.Subject,

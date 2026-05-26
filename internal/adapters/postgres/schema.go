@@ -18,6 +18,7 @@ func (s *Store) CheckRequiredTables(ctx context.Context) error {
 		"todos",
 		"ai_prompts",
 		"email_accounts",
+		"email_sync_cursors",
 		"runtime_secrets",
 		"workspaces",
 		"assistant_conversations",

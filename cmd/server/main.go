@@ -58,7 +58,7 @@ func main() {
 	}
 	secretResolver := secrets.RuntimeResolver{Store: store, Box: secretBox}
 	imapClient := emailadapter.IMAPClient{AllowPrivateHosts: cfg.AppEnv == "dev"}
-	emailService := usecase.EmailService{UOW: store, Accounts: store, Messages: store, People: store, Companies: store, Activities: store, Prompts: store, Secrets: store, Audit: store, Box: secretBox, SecretResolver: secretResolver, Fetcher: imapClient, Tester: imapClient}
+	emailService := usecase.EmailService{UOW: store, Accounts: store, Messages: store, People: store, Companies: store, Deals: store, Activities: store, Prompts: store, Secrets: store, Audit: store, Box: secretBox, SecretResolver: secretResolver, Fetcher: imapClient, FolderLister: imapClient, Tester: imapClient}
 	var magicLinkSender ports.MagicLinkSender
 	if cfg.AppEnv == "prod" {
 		magicLinkSender = notifications.ResendMagicLinkSender{APIKey: cfg.ResendAPIKey, Domain: cfg.ResendDomain}
@@ -77,7 +77,7 @@ func main() {
 		MagicLinkIPLimiter:    httpapi.NewMemoryRateLimiter(time.Hour, 20),
 		CRM:                   usecase.CRMService{UOW: store, People: store, Companies: store, Deals: store, Relationships: store, Activities: store, Tags: store, Workspaces: store, SearchStore: store, Todos: store},
 		AI:                    usecase.AIService{UOW: store, Prompts: store, Conversations: store, People: store, Companies: store, Deals: store, Relationships: store, Activities: store, Tags: store, Workspaces: store, Search: store, Todos: store, Emails: store, AI: aiAdapter, AgentTracer: agentTracer},
-		Suggestions:           usecase.SuggestionService{UOW: store, Prompts: store, People: store, Companies: store, Relationships: store, Activities: store, Emails: store},
+		Suggestions:           usecase.SuggestionService{UOW: store, Prompts: store, People: store, Companies: store, Deals: store, Relationships: store, Activities: store, Emails: store},
 		Email:                 emailService,
 		Audit:                 usecase.AuditService{Store: store},
 		Admin:                 usecase.AdminService{Store: store},

@@ -228,7 +228,7 @@ func (s *Store) ListDeals(ctx context.Context, query string, workspaceID domain.
 		return nil, err
 	}
 	defer rows.Close()
-	var out []domain.Deal
+	out := make([]domain.Deal, 0)
 	for rows.Next() {
 		var d domain.Deal
 		if err := rows.Scan(&d.ID, &d.WorkspaceID, &d.Name, &d.Stage, &d.ValueCents, &d.Currency, &d.CreatedAt, &d.UpdatedAt); err != nil {
@@ -551,7 +551,7 @@ func (s *Store) ListTodos(ctx context.Context, query, status, due string, entity
 		return nil, err
 	}
 	defer rows.Close()
-	var out []domain.Todo
+	out := make([]domain.Todo, 0)
 	for rows.Next() {
 		var t domain.Todo
 		if err := rows.Scan(&t.ID, &t.WorkspaceID, &t.EntityType, &t.EntityID, &t.Title, &t.Body, &t.DueAt, &t.Priority, &t.Status, &t.CreatedAt, &t.CompletedAt); err != nil {

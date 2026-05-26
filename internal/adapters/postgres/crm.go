@@ -131,7 +131,7 @@ func (s *Store) ListCompanies(ctx context.Context, query string, workspaceID dom
 		return nil, err
 	}
 	defer rows.Close()
-	var out []domain.Company
+	out := make([]domain.Company, 0)
 	for rows.Next() {
 		var c domain.Company
 		if err := rows.Scan(&c.ID, &c.Name, &c.Domain, &c.LastTouchAt, &c.CreatedAt, &c.UpdatedAt); err != nil {

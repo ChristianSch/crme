@@ -50,7 +50,7 @@ func (s *Store) ListPeople(ctx context.Context, query string, workspaceID domain
 		return nil, err
 	}
 	defer rows.Close()
-	var out []domain.Person
+	out := make([]domain.Person, 0)
 	for rows.Next() {
 		var p domain.Person
 		if err := rows.Scan(&p.ID, &p.FirstName, &p.LastName, &p.Email, &p.Phone, &p.Title, &p.LinkedInURL, &p.City, &p.CompanyName, &p.Status, &p.Source, &p.MyTurn, &p.LastTouchAt, &p.CreatedAt, &p.UpdatedAt); err != nil {

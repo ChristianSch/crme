@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -1648,6 +1649,11 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
+	value := reflect.ValueOf(v)
+	if value.IsValid() && value.Kind() == reflect.Slice && value.IsNil() {
+		_, _ = w.Write([]byte("[]\n"))
+		return
+	}
 	_ = json.NewEncoder(w).Encode(v)
 }
 func err(w http.ResponseWriter, e error) bool {

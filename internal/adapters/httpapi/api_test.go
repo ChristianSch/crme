@@ -42,6 +42,20 @@ func TestSecurityMiddlewareAllowsConfiguredOrigin(t *testing.T) {
 	}
 }
 
+func TestWriteJSONEncodesNilSliceAsEmptyArray(t *testing.T) {
+	var out []string
+	res := httptest.NewRecorder()
+
+	writeJSON(res, http.StatusOK, out)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", res.Code)
+	}
+	if res.Body.String() != "[]\n" {
+		t.Fatalf("expected empty array, got %q", res.Body.String())
+	}
+}
+
 func TestErrorResponseStatusMapping(t *testing.T) {
 	tests := []struct {
 		name   string

@@ -300,6 +300,7 @@ func (s EmailService) processFetchedMessage(ctx context.Context, account domain.
 }
 
 func (s EmailService) processFetchedMessageNoTx(ctx context.Context, account domain.EmailAccount, m domain.EmailMessage) (bool, bool, int, error) {
+	m = sanitizeEmailMessage(m)
 	created, err := s.Messages.UpsertEmailMessage(ctx, m)
 	if err != nil {
 		return false, false, 0, err
@@ -645,10 +646,32 @@ func relevantEmails(account domain.EmailAccount, m domain.EmailMessage) []string
 }
 
 func truncateText(s string, n int) string {
-	if len(s) <= n {
+	s = strings.ToValidUTF8(s, "")
+	if n <= 0 {
+		return ""
+	}
+	runes := []rune(s)
+	if len(runes) <= n {
 		return s
 	}
-	return s[:n-1] + "…"
+	if n == 1 {
+		return "…"
+	}
+	return string(runes[:n-1]) + "…"
+}
+
+func sanitizeEmailMessage(m domain.EmailMessage) domain.EmailMessage {
+	m.MessageID = strings.ToValidUTF8(m.MessageID, "")
+	m.ThreadKey = strings.ToValidUTF8(m.ThreadKey, "")
+	m.Direction = strings.ToValidUTF8(m.Direction, "")
+	m.FromEmail = strings.ToValidUTF8(m.FromEmail, "")
+	m.FromName = strings.ToValidUTF8(m.FromName, "")
+	for i, email := range m.ToEmails {
+		m.ToEmails[i] = strings.ToValidUTF8(email, "")
+	}
+	m.Subject = strings.ToValidUTF8(m.Subject, "")
+	m.BodyText = strings.ToValidUTF8(m.BodyText, "")
+	return m
 }
 
 type EmailSyncReport struct {

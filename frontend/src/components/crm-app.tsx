@@ -905,8 +905,8 @@ function SettingsPanel({ organization, members, invitations, emailAccounts, apiT
   function emailError(err: unknown, fallback: string) {
     const message = err instanceof Error ? err.message.trim() : "";
     if (!message) return fallback;
-    if (message === "internal server error" || message.includes("runtime secret storage is not configured")) {
-      return "Email password storage is not configured. Set CRME_SECRET_KEY on the API server and restart it.";
+    if (message === "internal server error" || message.includes("runtime secret storage is not configured") || message.includes("email password storage is unavailable")) {
+      return "Email password storage is unavailable. Please try again later.";
     }
     return message.replace(/^validation error:\s*/i, "");
   }

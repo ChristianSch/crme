@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, LinkIcon, MoreHorizontal, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -49,7 +49,7 @@ export function SuggestionsPanel({
   suggestions: Suggestion[];
   people: Person[];
   companies: Company[];
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
   onUndo: (undo: SuggestionUndo | null) => void;
 }) {
   const [busyId, setBusyId] = useState<string>("");
@@ -241,9 +241,31 @@ function LinkPersonPopover({
   disabled: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Person[]>([]);
+  const [searching, setSearching] = useState(false);
   const matches = suggestedPeopleForSuggestion(suggestion, people);
-  const options = (query ? people.filter((person) => searchable([fullName(person), person.email], query)) : matches).slice(0, 30);
-  const selected = people.find((person) => person.id === value);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      try {
+        const results = await api.people(trimmed, "", 30, 0);
+        if (!cancelled) setSearchResults(results ?? []);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [query]);
+
+  const localOptions = query ? people.filter((person) => searchable([fullName(person), person.email], query)) : matches;
+  const options = uniquePeople([...searchResults, ...localOptions]).slice(0, 30);
+  const selected = uniquePeople([...people, ...searchResults]).find((person) => person.id === value);
 
   return (
     <Popover>
@@ -256,7 +278,7 @@ function LinkPersonPopover({
             <div className="text-sm font-medium">Link to existing person</div>
             <p className="text-xs text-muted-foreground">Choose who should receive this email address.</p>
           </div>
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search people" placeholder="Search people" className="h-9 rounded-xl" />
+          <Input value={query} onChange={(event) => { const value = event.target.value; setQuery(value); setSearching(Boolean(value.trim())); if (!value.trim()) setSearchResults([]); }} aria-label="Search people" placeholder="Search people" className="h-9 rounded-xl" />
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <div className="space-y-1">
               {options.map((person) => (
@@ -265,7 +287,8 @@ function LinkPersonPopover({
                   {person.email && <span className="block truncate text-xs text-muted-foreground">{person.email}</span>}
                 </button>
               ))}
-              {!options.length && <p className="px-3 py-4 text-sm text-muted-foreground">{query ? "No matching people." : "No likely existing person match found. Search to choose manually."}</p>}
+              {searching && !options.length && <p className="px-3 py-4 text-sm text-muted-foreground">Searching people...</p>}
+              {!searching && !options.length && <p className="px-3 py-4 text-sm text-muted-foreground">{query ? "No matching people." : "No likely existing person match found. Search to choose manually."}</p>}
             </div>
           </div>
           <Button size="sm" className="h-9 w-full shrink-0 rounded-xl" disabled={disabled || !value} onClick={onLink}>Link{selected ? ` to ${fullName(selected)}` : " selected"}</Button>
@@ -291,9 +314,31 @@ function LinkCompanyPopover({
   disabled: boolean;
 }) {
   const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Company[]>([]);
+  const [searching, setSearching] = useState(false);
   const matches = suggestedCompaniesForSuggestion(suggestion, companies);
-  const options = (query ? companies.filter((company) => searchable([company.name, company.domain], query)) : matches).slice(0, 30);
-  const selected = companies.find((company) => company.id === value);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    let cancelled = false;
+    const timeout = window.setTimeout(async () => {
+      try {
+        const results = await api.companies(trimmed, "", 30, 0);
+        if (!cancelled) setSearchResults(results ?? []);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [query]);
+
+  const localOptions = query ? companies.filter((company) => searchable([company.name, company.domain], query)) : matches;
+  const options = uniqueCompanies([...searchResults, ...localOptions]).slice(0, 30);
+  const selected = uniqueCompanies([...companies, ...searchResults]).find((company) => company.id === value);
 
   return (
     <Popover>
@@ -306,7 +351,7 @@ function LinkCompanyPopover({
             <div className="text-sm font-medium">Link to existing company</div>
             <p className="text-xs text-muted-foreground">Choose which company should receive this domain.</p>
           </div>
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Search companies" placeholder="Search companies" className="h-9 rounded-xl" />
+          <Input value={query} onChange={(event) => { const value = event.target.value; setQuery(value); setSearching(Boolean(value.trim())); if (!value.trim()) setSearchResults([]); }} aria-label="Search companies" placeholder="Search companies" className="h-9 rounded-xl" />
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <div className="space-y-1">
               {options.map((company) => (
@@ -315,7 +360,8 @@ function LinkCompanyPopover({
                   {company.domain && <span className="block truncate text-xs text-muted-foreground">{company.domain}</span>}
                 </button>
               ))}
-              {!options.length && <p className="px-3 py-4 text-sm text-muted-foreground">{query ? "No matching companies." : "No likely company match found. Search to choose manually."}</p>}
+              {searching && !options.length && <p className="px-3 py-4 text-sm text-muted-foreground">Searching companies...</p>}
+              {!searching && !options.length && <p className="px-3 py-4 text-sm text-muted-foreground">{query ? "No matching companies." : "No likely company match found. Search to choose manually."}</p>}
             </div>
           </div>
           <Button size="sm" className="h-9 w-full shrink-0 rounded-xl" disabled={disabled || !value} onClick={onLink}>Link{selected ? ` to ${selected.name}` : " selected"}</Button>
@@ -323,6 +369,14 @@ function LinkCompanyPopover({
       </PopoverContent>
     </Popover>
   );
+}
+
+function uniquePeople(people: Person[]) {
+  return people.filter((person, index, all) => all.findIndex((item) => item.id === person.id) === index);
+}
+
+function uniqueCompanies(companies: Company[]) {
+  return companies.filter((company, index, all) => all.findIndex((item) => item.id === company.id) === index);
 }
 
 function suggestionCardBody(suggestion: Suggestion) {

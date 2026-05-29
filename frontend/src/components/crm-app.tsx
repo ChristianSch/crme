@@ -466,7 +466,7 @@ export function CrmApp({ view, initialSidebarCollapsed = false, initialWorkspace
               </PagedTable>
             ) : view === "suggestions" ? (
               <PagedTable page={suggestionsPage.page} hasNext={suggestionsPage.hasNext} loading={suggestionsPage.loading} onPageChange={loadSuggestions}>
-                <SuggestionsPanel suggestions={filteredSuggestions} people={people} companies={companies} onChanged={() => loadSuggestions(suggestionsPage.page)} onUndo={setUndo} />
+                <SuggestionsPanel suggestions={filteredSuggestions} people={people} companies={companies} onChanged={loadData} onUndo={setUndo} />
               </PagedTable>
             ) : (
               <DashboardPanel tasks={filteredTasks} suggestions={suggestions} people={people} companies={companies} deals={deals} onSelectTask={setSelectedTask} onSelectPerson={openPerson} onSelectCompany={openCompany} onSelectDeal={openDeal} onOpenTasks={() => router.push("/tasks")} onOpenSuggestions={() => router.push("/suggestions")} />

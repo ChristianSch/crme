@@ -1,5 +1,11 @@
-import { CrmPage } from "@/components/crm-page";
+import { cookies } from "next/headers";
 
-export default function DashboardPage() {
-  return <CrmPage view="dashboard" />;
+import { DashboardView } from "@/components/views/dashboard-view";
+
+export default async function DashboardPage() {
+  const cookieStore = await cookies();
+  const initialSidebarCollapsed = cookieStore.get("crme_sidebar_collapsed")?.value === "true";
+  const initialWorkspaceId = cookieStore.get("crme_workspace_id")?.value || "all";
+
+  return <DashboardView initialSidebarCollapsed={initialSidebarCollapsed} initialWorkspaceId={initialWorkspaceId} />;
 }

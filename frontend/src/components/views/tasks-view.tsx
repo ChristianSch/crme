@@ -115,7 +115,7 @@ export function TasksView({ initialSidebarCollapsed = false, initialWorkspaceId 
         <div className="mt-5 min-w-0 overflow-hidden rounded-xl border border-border bg-background">
           {shell.state === "loading" ? <TableSkeleton /> : shell.state === "error" ? <EmptyState title="We’re sorry, something went wrong" body="Please come back later and try again." /> : loadError ? <EmptyState title="Could not load tasks" body={loadError} /> : (
             <PagedTable page={page} hasNext={hasNext} loading={loading} onPageChange={loadTasks}>
-              <TasksTable tasks={tasks} people={people} companies={companies} deals={deals} onSelect={setSelectedTask} onSelectPerson={() => undefined} onSelectCompany={() => undefined} onSelectDeal={() => undefined} />
+              <TasksTable tasks={tasks} people={people} companies={companies} deals={deals} onSelect={setSelectedTask} />
             </PagedTable>
           )}
         </div>
@@ -136,9 +136,6 @@ export function TasksView({ initialSidebarCollapsed = false, initialWorkspaceId 
           setSelectedTask(null);
           void loadTasks(0);
         }}
-        onSelectPerson={() => undefined}
-        onSelectCompany={() => undefined}
-        onSelectDeal={() => undefined}
       />
     </>
   );

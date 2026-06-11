@@ -162,8 +162,6 @@ export function CompaniesView({ initialSidebarCollapsed = false, initialWorkspac
           setSelectedCompany(null);
           void loadCompanies(0);
         }}
-        onSelectPerson={() => undefined}
-        onSelectDeal={() => undefined}
       />
     </>
   );

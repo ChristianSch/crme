@@ -188,8 +188,6 @@ export function DealsView({ initialSidebarCollapsed = false, initialWorkspaceId 
         onRelationsChanged={() => setRelationRefresh((value) => value + 1)}
         onActivityCreated={() => setRelationRefresh((value) => value + 1)}
         onTaskChanged={() => setRelationRefresh((value) => value + 1)}
-        onSelectPerson={() => undefined}
-        onSelectCompany={() => undefined}
         onSaved={(deal) => {
           setSelectedDeal(deal);
           void loadDeals(page);

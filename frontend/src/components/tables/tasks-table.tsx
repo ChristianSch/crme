@@ -25,9 +25,9 @@ export function TasksTable({
   companies: Company[];
   deals: Deal[];
   onSelect: (task: Todo) => void;
-  onSelectPerson: (person: Person) => void;
-  onSelectCompany: (company: Company) => void;
-  onSelectDeal: (deal: Deal) => void;
+  onSelectPerson?: (person: Person) => void;
+  onSelectCompany?: (company: Company) => void;
+  onSelectDeal?: (deal: Deal) => void;
 }) {
   if (!tasks.length) return <EmptyState title="No tasks found" body="Open tasks from the selected workspace will show here." />;
 
@@ -96,13 +96,14 @@ function LinkedEntity({
   people: Person[];
   companies: Company[];
   deals: Deal[];
-  onSelectPerson: (person: Person) => void;
-  onSelectCompany: (company: Company) => void;
-  onSelectDeal: (deal: Deal) => void;
+  onSelectPerson?: (person: Person) => void;
+  onSelectCompany?: (company: Company) => void;
+  onSelectDeal?: (deal: Deal) => void;
 }) {
   if (task.entity_type === "person") {
     const person = people.find((item) => item.id === task.entity_id);
     if (!person) return <span className="text-muted-foreground">Unknown person</span>;
+    if (!onSelectPerson) return <span className="max-w-[24ch] truncate font-medium">{fullName(person)}</span>;
     return (
       <button
         type="button"
@@ -120,6 +121,7 @@ function LinkedEntity({
   if (task.entity_type === "company") {
     const company = companies.find((item) => item.id === task.entity_id);
     if (!company) return <span className="text-muted-foreground">Unknown company</span>;
+    if (!onSelectCompany) return <span className="max-w-[24ch] truncate font-medium">{company.name || company.domain || "Unnamed company"}</span>;
     return (
       <button
         type="button"
@@ -137,6 +139,7 @@ function LinkedEntity({
   if (task.entity_type === "deal") {
     const deal = deals.find((item) => item.id === task.entity_id);
     if (!deal) return <span className="text-muted-foreground">Unknown deal</span>;
+    if (!onSelectDeal) return <span className="max-w-[24ch] truncate font-medium">{deal.name || "Unnamed deal"}</span>;
     return (
       <button
         type="button"

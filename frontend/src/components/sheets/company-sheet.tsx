@@ -41,8 +41,8 @@ export function CompanySheet({
   onTaskChanged: () => void;
   onSaved: (company: Company) => void;
   onDeleted: () => void;
-  onSelectPerson: (person: Person) => void;
-  onSelectDeal: (deal: Deal) => void;
+  onSelectPerson?: (person: Person) => void;
+  onSelectDeal?: (deal: Deal) => void;
 }) {
   const [editingId, setEditingId] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -163,24 +163,38 @@ export function CompanySheet({
                 <section>
                   <SectionTitle icon={<UserRound className="size-4" />} title="People" />
                   <div className="mt-3 divide-y border-y">
-                    {relatedPeople.length ? relatedPeople.map((person) => (
-                      <button key={person.id} type="button" className="w-full py-3 text-left hover:bg-muted/30" onClick={() => onSelectPerson(person)}>
-                        <div className="truncate text-sm font-medium underline-offset-4 hover:underline">{fullName(person)}</div>
-                        <div className="mt-0.5 truncate text-xs text-muted-foreground">{person.email || "No email"}</div>
-                      </button>
-                    )) : <p className="text-sm text-muted-foreground">No linked people loaded.</p>}
+                    {relatedPeople.length ? relatedPeople.map((person) => {
+                      const content = (
+                        <>
+                          <div className="truncate text-sm font-medium underline-offset-4 group-hover:underline">{fullName(person)}</div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{person.email || "No email"}</div>
+                        </>
+                      );
+                      return onSelectPerson ? (
+                        <button key={person.id} type="button" className="group w-full py-3 text-left hover:bg-muted/30" onClick={() => onSelectPerson(person)}>{content}</button>
+                      ) : (
+                        <div key={person.id} className="w-full py-3 text-left">{content}</div>
+                      );
+                    }) : <p className="text-sm text-muted-foreground">No linked people loaded.</p>}
                   </div>
                 </section>
                 <Separator />
                 <section>
                   <SectionTitle icon={<Handshake className="size-4" />} title="Deals" />
                   <div className="mt-3 divide-y border-y">
-                    {relatedDeals.length ? relatedDeals.map((deal) => (
-                      <button key={deal.id} type="button" className="w-full py-3 text-left hover:bg-muted/30" onClick={() => onSelectDeal(deal)}>
-                        <div className="truncate text-sm font-medium underline-offset-4 hover:underline">{deal.name || "Unnamed deal"}</div>
-                        <div className="mt-0.5 truncate text-xs text-muted-foreground">{deal.stage || "No stage"}</div>
-                      </button>
-                    )) : <p className="text-sm text-muted-foreground">No linked deals loaded.</p>}
+                    {relatedDeals.length ? relatedDeals.map((deal) => {
+                      const content = (
+                        <>
+                          <div className="truncate text-sm font-medium underline-offset-4 group-hover:underline">{deal.name || "Unnamed deal"}</div>
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{deal.stage || "No stage"}</div>
+                        </>
+                      );
+                      return onSelectDeal ? (
+                        <button key={deal.id} type="button" className="group w-full py-3 text-left hover:bg-muted/30" onClick={() => onSelectDeal(deal)}>{content}</button>
+                      ) : (
+                        <div key={deal.id} className="w-full py-3 text-left">{content}</div>
+                      );
+                    }) : <p className="text-sm text-muted-foreground">No linked deals loaded.</p>}
                   </div>
                 </section>
                 <Separator />

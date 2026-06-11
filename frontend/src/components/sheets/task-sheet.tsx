@@ -57,9 +57,9 @@ export function TaskSheet({
   workspaceId?: string;
   onTaskChanged: (task: Todo) => void;
   onDeleted: () => void;
-  onSelectPerson: (person: Person) => void;
-  onSelectCompany: (company: Company) => void;
-  onSelectDeal: (deal: Deal) => void;
+  onSelectPerson?: (person: Person) => void;
+  onSelectCompany?: (company: Company) => void;
+  onSelectDeal?: (deal: Deal) => void;
 }) {
   const linkedTo = task ? linkedEntityLabel(task, people, companies, deals) : "";
   const [personQuery, setPersonQuery] = useState("");
@@ -236,12 +236,18 @@ export function TaskSheet({
                     <Detail label="Due" value={relativeDate(task.due_at)} />
                     <Detail label="Priority" value={priorityLabel(task.priority || "normal")} />
                     <Detail label="Linked to">
-                      {linkedPerson ? (
+                      {linkedPerson && onSelectPerson ? (
                         <button type="button" className="text-left underline-offset-4 hover:underline" onClick={() => onSelectPerson(linkedPerson)}>{fullName(linkedPerson)}</button>
-                      ) : linkedCompany ? (
+                      ) : linkedPerson ? (
+                        <span>{fullName(linkedPerson)}</span>
+                      ) : linkedCompany && onSelectCompany ? (
                         <button type="button" className="text-left underline-offset-4 hover:underline" onClick={() => onSelectCompany(linkedCompany)}>{linkedCompany.name || linkedCompany.domain || "Unnamed company"}</button>
-                      ) : linkedDeal ? (
+                      ) : linkedCompany ? (
+                        <span>{linkedCompany.name || linkedCompany.domain || "Unnamed company"}</span>
+                      ) : linkedDeal && onSelectDeal ? (
                         <button type="button" className="text-left underline-offset-4 hover:underline" onClick={() => onSelectDeal(linkedDeal)}>{linkedDeal.name || "Unnamed deal"}</button>
+                      ) : linkedDeal ? (
+                        <span>{linkedDeal.name || "Unnamed deal"}</span>
                       ) : (
                         <span>{linkedTo}</span>
                       )}

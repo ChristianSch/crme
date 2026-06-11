@@ -52,8 +52,8 @@ export function DealSheet({
   onRelationsChanged: () => void;
   onActivityCreated: () => void;
   onTaskChanged: () => void;
-  onSelectPerson: (person: Person) => void;
-  onSelectCompany: (company: Company) => void;
+  onSelectPerson?: (person: Person) => void;
+  onSelectCompany?: (company: Company) => void;
   onSaved: (deal: Deal) => void;
   onDeleted: () => void;
 }) {
@@ -255,10 +255,17 @@ export function DealSheet({
                   <div className="mt-3 divide-y border-y">
                     {isRelationsLoading ? <RelationSkeleton /> : isRelationsError ? <RelationError /> : linkedPeople.length ? linkedPeople.map((person) => (
                       <div key={person.id} className="flex items-center justify-between gap-3 py-3">
-                        <button type="button" className="min-w-0 text-left" onClick={() => onSelectPerson(person)}>
-                          <div className="truncate text-sm font-medium hover:underline">{fullName(person)}</div>
-                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{person.email || person.title || "No email"}</div>
-                        </button>
+                        {onSelectPerson ? (
+                          <button type="button" className="min-w-0 text-left" onClick={() => onSelectPerson(person)}>
+                            <div className="truncate text-sm font-medium hover:underline">{fullName(person)}</div>
+                            <div className="mt-0.5 truncate text-xs text-muted-foreground">{person.email || person.title || "No email"}</div>
+                          </button>
+                        ) : (
+                          <div className="min-w-0 text-left">
+                            <div className="truncate text-sm font-medium">{fullName(person)}</div>
+                            <div className="mt-0.5 truncate text-xs text-muted-foreground">{person.email || person.title || "No email"}</div>
+                          </div>
+                        )}
                         <ConfirmAction
                           title={`Unlink ${fullName(person)} from this deal?`}
                           description="This only removes the relationship. The person and deal records stay in CRMe."
@@ -296,10 +303,17 @@ export function DealSheet({
                   <div className="mt-3 divide-y border-y">
                     {isRelationsLoading ? <RelationSkeleton /> : isRelationsError ? <RelationError /> : linkedCompanies.length ? linkedCompanies.map((company) => (
                       <div key={company.id} className="flex items-center justify-between gap-3 py-3">
-                        <button type="button" className="min-w-0 text-left" onClick={() => onSelectCompany(company)}>
-                          <div className="truncate text-sm font-medium hover:underline">{company.name || "Unnamed company"}</div>
-                          <div className="mt-0.5 truncate text-xs text-muted-foreground">{company.domain || "No domain"}</div>
-                        </button>
+                        {onSelectCompany ? (
+                          <button type="button" className="min-w-0 text-left" onClick={() => onSelectCompany(company)}>
+                            <div className="truncate text-sm font-medium hover:underline">{company.name || "Unnamed company"}</div>
+                            <div className="mt-0.5 truncate text-xs text-muted-foreground">{company.domain || "No domain"}</div>
+                          </button>
+                        ) : (
+                          <div className="min-w-0 text-left">
+                            <div className="truncate text-sm font-medium">{company.name || "Unnamed company"}</div>
+                            <div className="mt-0.5 truncate text-xs text-muted-foreground">{company.domain || "No domain"}</div>
+                          </div>
+                        )}
                         <ConfirmAction
                           title={`Unlink ${company.name || "this company"} from this deal?`}
                           description="This only removes the relationship. The company and deal records stay in CRMe."

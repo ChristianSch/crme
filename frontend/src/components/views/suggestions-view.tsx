@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Search, X } from "lucide-react";
 
 import { CrmRouteShell, LoginScreen, OrganizationGate, PagedTable, UndoToast, useLogout, useOrganizationSwitcher, usePersistedSidebar, usePersistedWorkspace } from "@/components/crm/crm-shared";
@@ -8,8 +8,8 @@ import { EmptyState, TableSkeleton } from "@/components/common/data-state";
 import { SuggestionsPanel, readStoredSuggestionUndo, type SuggestionUndo } from "@/components/suggestions/suggestions-panel";
 import { Input } from "@/components/ui/input";
 import { useCrmShell } from "@/hooks/use-crm-shell";
-import { PAGE_SIZE } from "@/hooks/use-paged-list";
-import { api, Company, Person, Suggestion } from "@/lib/api";
+import { PAGE_SIZE, usePagedResource } from "@/hooks/use-paged-list";
+import { api, Company, Person } from "@/lib/api";
 import { searchable } from "@/lib/format";
 
 export function SuggestionsView({ initialSidebarCollapsed = false, initialWorkspaceId = "all" }: { initialSidebarCollapsed?: boolean; initialWorkspaceId?: string }) {
@@ -20,43 +20,31 @@ export function SuggestionsView({ initialSidebarCollapsed = false, initialWorksp
   const logout = useLogout(shell.loadShell);
 
   const [query, setQuery] = useState("");
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [page, setPage] = useState(0);
-  const [hasNext, setHasNext] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState("");
   const [undo, setUndo] = useState<SuggestionUndo | null>(() => typeof window === "undefined" ? null : readStoredSuggestionUndo());
 
   const activeWorkspaceId = workspaceId === "all" ? "" : workspaceId;
 
-  const loadSuggestions = useCallback(async (nextPage = 0) => {
-    if (shell.state !== "ready") return;
-    setLoading(true);
-    setLoadError("");
-    try {
-      const [nextSuggestions, nextPeople, nextCompanies] = await Promise.all([
-        api.suggestions("open", PAGE_SIZE, nextPage * PAGE_SIZE),
-        api.people("", activeWorkspaceId, PAGE_SIZE, 0),
-        api.companies("", activeWorkspaceId, PAGE_SIZE, 0),
-      ]);
-      setSuggestions(nextSuggestions ?? []);
-      setPeople(nextPeople ?? []);
-      setCompanies(nextCompanies ?? []);
-      setPage(nextPage);
-      setHasNext((nextSuggestions ?? []).length === PAGE_SIZE);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Could not load suggestions");
-    } finally {
-      setLoading(false);
-    }
-  }, [activeWorkspaceId, shell.state]);
-
-  useEffect(() => {
-    if (shell.state !== "ready") return;
-    queueMicrotask(() => void loadSuggestions(0));
-  }, [loadSuggestions, shell.state]);
+  const loadSuggestionsPage = useCallback(async (nextPage: number) => {
+    const [nextSuggestions, nextPeople, nextCompanies] = await Promise.all([
+      api.suggestions("open", PAGE_SIZE, nextPage * PAGE_SIZE),
+      api.people("", activeWorkspaceId, PAGE_SIZE, 0),
+      api.companies("", activeWorkspaceId, PAGE_SIZE, 0),
+    ]);
+    return { items: nextSuggestions ?? [], extra: { people: nextPeople ?? [], companies: nextCompanies ?? [] } };
+  }, [activeWorkspaceId]);
+  const updateLookups = useCallback((result: { extra?: { people: Person[]; companies: Company[] } }) => {
+    setPeople(result.extra?.people ?? []);
+    setCompanies(result.extra?.companies ?? []);
+  }, []);
+  const { items: suggestions, page, hasNext, loading, loadError, load: loadSuggestions } = usePagedResource({
+    enabled: shell.state === "ready",
+    loadPage: loadSuggestionsPage,
+    errorMessage: "Could not load suggestions",
+    debounceMs: 0,
+    onLoaded: updateLookups,
+  });
 
   const filteredSuggestions = useMemo(() => suggestions.filter((suggestion) => searchable([suggestion.title, suggestion.body, suggestion.kind, suggestion.entity_type, suggestion.status], query)), [query, suggestions]);
 

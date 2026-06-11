@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCrmShell } from "@/hooks/use-crm-shell";
-import { PAGE_SIZE } from "@/hooks/use-paged-list";
+import { PAGE_SIZE, usePagedResource } from "@/hooks/use-paged-list";
 import { api, Company, Deal, Person, TimelineItem, Todo } from "@/lib/api";
 
 const DEAL_STAGES = [
@@ -33,11 +33,7 @@ export function DealsView({ initialSidebarCollapsed = false, initialWorkspaceId 
   const logout = useLogout(shell.loadShell);
 
   const [query, setQuery] = useState("");
-  const [deals, setDeals] = useState<Deal[]>([]);
-  const [page, setPage] = useState(0);
-  const [hasNext, setHasNext] = useState(true);
-  const [loadingDeals, setLoadingDeals] = useState(false);
-  const [loadError, setLoadError] = useState("");
+
   const [createOpen, setCreateOpen] = useState(false);
 
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -52,29 +48,12 @@ export function DealsView({ initialSidebarCollapsed = false, initialWorkspaceId 
 
   const activeWorkspaceId = workspaceId === "all" ? "" : workspaceId;
 
-  const loadDeals = useCallback(async (nextPage = 0) => {
-    if (shell.state !== "ready") return;
-    setLoadingDeals(true);
-    setLoadError("");
-    try {
-      const next = await api.deals(query, activeWorkspaceId, PAGE_SIZE, nextPage * PAGE_SIZE);
-      setDeals(next ?? []);
-      setPage(nextPage);
-      setHasNext((next ?? []).length === PAGE_SIZE);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Could not load deals");
-    } finally {
-      setLoadingDeals(false);
-    }
-  }, [activeWorkspaceId, query, shell.state]);
-
-  useEffect(() => {
-    if (shell.state !== "ready") return;
-    const timeout = window.setTimeout(() => {
-      void loadDeals(0);
-    }, 200);
-    return () => window.clearTimeout(timeout);
-  }, [loadDeals, shell.state]);
+  const loadDealsPage = useCallback((nextPage: number) => api.deals(query, activeWorkspaceId, PAGE_SIZE, nextPage * PAGE_SIZE), [activeWorkspaceId, query]);
+  const { items: deals, page, hasNext, loading: loadingDeals, loadError, load: loadDeals } = usePagedResource({
+    enabled: shell.state === "ready",
+    loadPage: loadDealsPage,
+    errorMessage: "Could not load deals",
+  });
 
   useEffect(() => {
     let cancelled = false;

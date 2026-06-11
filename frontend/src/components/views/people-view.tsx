@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useCrmShell } from "@/hooks/use-crm-shell";
-import { PAGE_SIZE } from "@/hooks/use-paged-list";
+import { PAGE_SIZE, usePagedResource } from "@/hooks/use-paged-list";
 import { api, Company, Person, TimelineItem, Todo } from "@/lib/api";
 import { compareDates, toggleSort, type SortDirection } from "@/lib/format";
 
@@ -23,11 +23,7 @@ export function PeopleView({ initialSidebarCollapsed = false, initialWorkspaceId
   const logout = useLogout(shell.loadShell);
 
   const [query, setQuery] = useState("");
-  const [people, setPeople] = useState<Person[]>([]);
-  const [page, setPage] = useState(0);
-  const [hasNext, setHasNext] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState("");
+
   const [lastTouchSort, setLastTouchSort] = useState<SortDirection>("desc");
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -40,27 +36,12 @@ export function PeopleView({ initialSidebarCollapsed = false, initialWorkspaceId
 
   const activeWorkspaceId = workspaceId === "all" ? "" : workspaceId;
 
-  const loadPeople = useCallback(async (nextPage = 0) => {
-    if (shell.state !== "ready") return;
-    setLoading(true);
-    setLoadError("");
-    try {
-      const next = await api.people(query, activeWorkspaceId, PAGE_SIZE, nextPage * PAGE_SIZE);
-      setPeople(next ?? []);
-      setPage(nextPage);
-      setHasNext((next ?? []).length === PAGE_SIZE);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Could not load people");
-    } finally {
-      setLoading(false);
-    }
-  }, [activeWorkspaceId, query, shell.state]);
-
-  useEffect(() => {
-    if (shell.state !== "ready") return;
-    const timeout = window.setTimeout(() => void loadPeople(0), 200);
-    return () => window.clearTimeout(timeout);
-  }, [loadPeople, shell.state]);
+  const loadPeoplePage = useCallback((nextPage: number) => api.people(query, activeWorkspaceId, PAGE_SIZE, nextPage * PAGE_SIZE), [activeWorkspaceId, query]);
+  const { items: people, page, hasNext, loading, loadError, load: loadPeople } = usePagedResource({
+    enabled: shell.state === "ready",
+    loadPage: loadPeoplePage,
+    errorMessage: "Could not load people",
+  });
 
   useEffect(() => {
     let cancelled = false;

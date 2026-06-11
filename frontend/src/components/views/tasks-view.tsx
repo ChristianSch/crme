@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Search, X } from "lucide-react";
 
 import { CrmRouteShell, LoginScreen, OrganizationGate, PagedTable, useLogout, useOrganizationSwitcher, usePersistedSidebar, usePersistedWorkspace } from "@/components/crm/crm-shared";
@@ -10,7 +10,7 @@ import { TasksTable } from "@/components/tables/tasks-table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCrmShell } from "@/hooks/use-crm-shell";
-import { PAGE_SIZE } from "@/hooks/use-paged-list";
+import { PAGE_SIZE, usePagedResource } from "@/hooks/use-paged-list";
 import { api, Company, Deal, Person, Todo } from "@/lib/api";
 
 export function TasksView({ initialSidebarCollapsed = false, initialWorkspaceId = "all" }: { initialSidebarCollapsed?: boolean; initialWorkspaceId?: string }) {
@@ -23,47 +23,33 @@ export function TasksView({ initialSidebarCollapsed = false, initialWorkspaceId 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"open" | "done" | "all">("all");
   const [dueFilter, setDueFilter] = useState<"today" | "overdue" | "upcoming" | "none" | "all">("all");
-  const [tasks, setTasks] = useState<Todo[]>([]);
   const [people, setPeople] = useState<Person[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
   const [selectedTask, setSelectedTask] = useState<Todo | null>(null);
-  const [page, setPage] = useState(0);
-  const [hasNext, setHasNext] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [loadError, setLoadError] = useState("");
 
   const activeWorkspaceId = workspaceId === "all" ? "" : workspaceId;
 
-  const loadTasks = useCallback(async (nextPage = 0) => {
-    if (shell.state !== "ready") return;
-    setLoading(true);
-    setLoadError("");
-    try {
-      const [nextTasks, nextPeople, nextCompanies, nextDeals] = await Promise.all([
-        api.tasks({ q: query, workspace_id: activeWorkspaceId || undefined, status: statusFilter, due: dueFilter, limit: PAGE_SIZE, offset: nextPage * PAGE_SIZE }),
-        api.people("", activeWorkspaceId, PAGE_SIZE, 0),
-        api.companies("", activeWorkspaceId, PAGE_SIZE, 0),
-        api.deals("", activeWorkspaceId, PAGE_SIZE, 0),
-      ]);
-      setTasks(nextTasks ?? []);
-      setPeople(nextPeople ?? []);
-      setCompanies(nextCompanies ?? []);
-      setDeals(nextDeals ?? []);
-      setPage(nextPage);
-      setHasNext((nextTasks ?? []).length === PAGE_SIZE);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Could not load tasks");
-    } finally {
-      setLoading(false);
-    }
-  }, [activeWorkspaceId, dueFilter, query, shell.state, statusFilter]);
-
-  useEffect(() => {
-    if (shell.state !== "ready") return;
-    const timeout = window.setTimeout(() => void loadTasks(0), 200);
-    return () => window.clearTimeout(timeout);
-  }, [loadTasks, shell.state]);
+  const loadTasksPage = useCallback(async (nextPage: number) => {
+    const [nextTasks, nextPeople, nextCompanies, nextDeals] = await Promise.all([
+      api.tasks({ q: query, workspace_id: activeWorkspaceId || undefined, status: statusFilter, due: dueFilter, limit: PAGE_SIZE, offset: nextPage * PAGE_SIZE }),
+      api.people("", activeWorkspaceId, PAGE_SIZE, 0),
+      api.companies("", activeWorkspaceId, PAGE_SIZE, 0),
+      api.deals("", activeWorkspaceId, PAGE_SIZE, 0),
+    ]);
+    return { items: nextTasks ?? [], extra: { people: nextPeople ?? [], companies: nextCompanies ?? [], deals: nextDeals ?? [] } };
+  }, [activeWorkspaceId, dueFilter, query, statusFilter]);
+  const updateLookups = useCallback((result: { extra?: { people: Person[]; companies: Company[]; deals: Deal[] } }) => {
+    setPeople(result.extra?.people ?? []);
+    setCompanies(result.extra?.companies ?? []);
+    setDeals(result.extra?.deals ?? []);
+  }, []);
+  const { items: tasks, page, hasNext, loading, loadError, load: loadTasks } = usePagedResource({
+    enabled: shell.state === "ready",
+    loadPage: loadTasksPage,
+    errorMessage: "Could not load tasks",
+    onLoaded: updateLookups,
+  });
 
   if (shell.state === "unauthorized") return <LoginScreen onRetry={shell.loadShell} />;
   if (shell.state === "needs-organization") return <OrganizationGate userEmail={shell.me?.user.email} organizations={shell.organizations} selectedOrganizationId={shell.selectedOrganizationId} onSelect={setOrganizationId} onCreated={(id) => void shell.loadShell(id)} />;

@@ -90,6 +90,29 @@ export function SettingsView({ initialSidebarCollapsed = false, initialWorkspace
             error={settingsError}
             onRefresh={loadSettings}
             onToast={setToast}
+            onInviteMember={async (email, role) => {
+              if (!shell.selectedOrganizationId) return;
+              await api.inviteOrganizationMember(shell.selectedOrganizationId, email, role);
+            }}
+            onUpdateMemberRole={async (member, role) => {
+              if (!shell.selectedOrganizationId) return;
+              await api.updateOrganizationMemberRole(shell.selectedOrganizationId, member.user_id, role);
+            }}
+            onResendInvitation={async (invitation) => {
+              if (!shell.selectedOrganizationId || !invitation.id) return;
+              await api.resendOrganizationInvitation(shell.selectedOrganizationId, invitation.id);
+            }}
+            onRemoveMember={async (member) => {
+              if (!shell.selectedOrganizationId) return;
+              await api.removeOrganizationMember(shell.selectedOrganizationId, member.user_id);
+            }}
+            onCreateApiToken={(name) => api.createApiToken(name)}
+            onRevokeApiToken={(token) => api.revokeApiToken(token.id).then(() => undefined)}
+            onTestEmailAccount={(payload) => api.testEmailAccount(payload).then(() => undefined)}
+            onCreateEmailAccount={(payload) => api.createEmailAccount(payload).then(() => undefined)}
+            onUpdateEmailAccount={(account, payload) => api.updateEmailAccount(account.id, payload).then(() => undefined)}
+            onSetEmailSync={(account, syncEnabled) => api.updateEmailAccount(account.id, { ...account, sync_enabled: syncEnabled }).then(() => undefined)}
+            onDeleteEmailAccount={(account) => api.deleteEmailAccount(account.id).then(() => undefined)}
           />
         </div>
       </CrmRouteShell>

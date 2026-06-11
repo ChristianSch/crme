@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { api, API_URL, ApiToken, AuditLog, EmailAccount, OrganizationInvitation, OrganizationMember, OrganizationMembership } from "@/lib/api";
 import { relativeDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 type RelationLoadState = "idle" | "loading" | "ready" | "error";
 

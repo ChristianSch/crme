@@ -114,11 +114,14 @@ export function TasksView({ initialSidebarCollapsed = false, initialWorkspaceId 
         companies={companies}
         deals={deals}
         workspaceId={activeWorkspaceId}
-        onTaskChanged={(task) => {
-          setSelectedTask(task);
+        onSaveTask={async (task, changes) => {
+          const saved = await api.updateTask({ ...task, ...changes });
+          setSelectedTask(saved);
           void loadTasks(page);
+          return saved;
         }}
-        onDeleted={() => {
+        onDeleteTask={async (task) => {
+          await api.deleteTask(task.id);
           setSelectedTask(null);
           void loadTasks(0);
         }}

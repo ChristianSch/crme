@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { api, Company, Deal, fullName, Person, TimelineItem, Todo } from "@/lib/api";
+import { Company, Deal, fullName, Person, TimelineItem, Todo } from "@/lib/api";
 import { dateValue } from "@/lib/datetime";
 import { formatMoney, relativeDate, searchable } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -32,13 +32,18 @@ export function DealSheet({
   relationState,
   tasks,
   timeline,
-  onRelationsChanged,
   onActivityCreated,
-  onTaskChanged,
   onSelectPerson,
   onSelectCompany,
-  onSaved,
-  onDeleted,
+  onSaveDeal,
+  onDeleteDeal,
+  onLinkPerson,
+  onUnlinkPerson,
+  onLinkCompany,
+  onUnlinkCompany,
+  onCreateTask,
+  onSaveTask,
+  onCompleteTask,
 }: {
   deal: Deal | null;
   onOpenChange: (open: boolean) => void;
@@ -49,13 +54,18 @@ export function DealSheet({
   relationState: RelationLoadState;
   tasks: Todo[];
   timeline: TimelineItem[];
-  onRelationsChanged: () => void;
   onActivityCreated: () => void;
-  onTaskChanged: () => void;
   onSelectPerson?: (person: Person) => void;
   onSelectCompany?: (company: Company) => void;
-  onSaved: (deal: Deal) => void;
-  onDeleted: () => void;
+  onSaveDeal: (deal: Deal) => Promise<Deal>;
+  onDeleteDeal: (deal: Deal) => Promise<void>;
+  onLinkPerson: (personId: string) => Promise<void>;
+  onUnlinkPerson: (personId: string) => Promise<void>;
+  onLinkCompany: (companyId: string) => Promise<void>;
+  onUnlinkCompany: (companyId: string) => Promise<void>;
+  onCreateTask: (input: { title: string; body: string; due_at?: string }) => Promise<void>;
+  onSaveTask: (task: Todo, changes: Partial<Todo>) => Promise<void>;
+  onCompleteTask: (task: Todo) => Promise<void>;
 }) {
   const [name, setName] = useState(deal?.name || "");
   const [stage, setStage] = useState(deal?.stage || "new");
@@ -107,7 +117,7 @@ export function DealSheet({
 
   async function saveDeal() {
     if (!deal) return;
-    const saved = await api.updateDeal({
+    await onSaveDeal({
       ...deal,
       name,
       stage,
@@ -115,69 +125,56 @@ export function DealSheet({
       currency: normalizeCurrency(currency),
     });
     setDetailsOpen(false);
-    onSaved(saved);
   }
 
   async function deleteDeal() {
     if (!deal) return;
-    await api.deleteDeal(deal.id);
-    onDeleted();
+    await onDeleteDeal(deal);
   }
 
   async function linkPerson() {
     if (!deal || !selectedPersonId) return;
-    await api.linkDealPerson(deal.id, selectedPersonId);
+    await onLinkPerson(selectedPersonId);
     setSelectedPersonId("");
     setPersonLinkOpen(false);
-    onRelationsChanged();
   }
 
   async function unlinkPerson(personId: string) {
     if (!deal) return;
-    await api.unlinkDealPerson(deal.id, personId);
-    onRelationsChanged();
+    await onUnlinkPerson(personId);
   }
 
   async function linkCompany() {
     if (!deal || !selectedCompanyId) return;
-    await api.linkDealCompany(deal.id, selectedCompanyId);
+    await onLinkCompany(selectedCompanyId);
     setSelectedCompanyId("");
     setCompanyLinkOpen(false);
-    onRelationsChanged();
   }
 
   async function unlinkCompany(companyId: string) {
     if (!deal) return;
-    await api.unlinkDealCompany(deal.id, companyId);
-    onRelationsChanged();
+    await onUnlinkCompany(companyId);
   }
 
   async function createTask() {
     if (!deal || (!taskTitle.trim() && !taskBody.trim())) return;
-    await api.createTask({
-      workspace_id: deal.workspace_id,
-      entity_type: "deal",
-      entity_id: deal.id,
+    await onCreateTask({
       title: taskTitle.trim(),
       body: taskBody.trim(),
       due_at: taskDueDate ? new Date(`${taskDueDate}T12:00:00`).toISOString() : undefined,
-      status: "open",
     });
     setTaskTitle("");
     setTaskBody("");
     setTaskDueDate("");
     setTaskComposerOpen(false);
-    onTaskChanged();
   }
 
   async function saveTask(task: Todo, changes: Partial<Todo>) {
-    await api.updateTask({ ...task, ...changes });
-    onTaskChanged();
+    await onSaveTask(task, changes);
   }
 
   async function completeTask(task: Todo) {
-    await api.completeTask(task.id);
-    onTaskChanged();
+    await onCompleteTask(task);
   }
 
   return (

@@ -132,16 +132,35 @@ export function CompaniesView({ initialSidebarCollapsed = false, initialWorkspac
         deals={linkedDeals}
         tasks={tasks}
         timeline={timeline}
-        workspaceId={activeWorkspaceId}
         onActivityCreated={() => setDetailRefresh((value) => value + 1)}
-        onTaskChanged={() => setDetailRefresh((value) => value + 1)}
-        onSaved={(company) => {
-          setSelectedCompany(company);
+        onSave={async (company) => {
+          const saved = await api.updateCompany(company);
+          setSelectedCompany(saved);
           void loadCompanies(page);
+          return saved;
         }}
-        onDeleted={() => {
+        onDelete={async (company) => {
+          await api.deleteCompany(company.id);
           setSelectedCompany(null);
           void loadCompanies(0);
+        }}
+        onCreateTask={async (input) => {
+          if (!selectedCompany) return;
+          await api.createTask({
+            workspace_id: activeWorkspaceId || undefined,
+            entity_type: "company",
+            entity_id: selectedCompany.id,
+            title: input.title,
+            body: input.body,
+            due_at: input.due_at,
+            status: "open",
+          });
+          setDetailRefresh((value) => value + 1);
+        }}
+        onToggleTask={async (task) => {
+          if (task.status === "done") await api.updateTask({ ...task, status: "open", completed_at: undefined });
+          else await api.completeTask(task.id);
+          setDetailRefresh((value) => value + 1);
         }}
       />
     </>

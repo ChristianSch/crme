@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { api, Company, Deal, fullName, Person, TimelineItem, Todo } from "@/lib/api";
+import { Company, Deal, fullName, Person, TimelineItem, Todo } from "@/lib/api";
 import { firstUsefulLine, relativeDate } from "@/lib/format";
 
 export function CompanySheet({
@@ -22,11 +22,11 @@ export function CompanySheet({
   deals,
   tasks,
   timeline,
-  workspaceId,
   onActivityCreated,
-  onTaskChanged,
-  onSaved,
-  onDeleted,
+  onSave,
+  onDelete,
+  onCreateTask,
+  onToggleTask,
   onSelectPerson,
   onSelectDeal,
 }: {
@@ -36,11 +36,11 @@ export function CompanySheet({
   deals: Deal[];
   tasks: Todo[];
   timeline: TimelineItem[];
-  workspaceId: string;
   onActivityCreated: () => void;
-  onTaskChanged: () => void;
-  onSaved: (company: Company) => void;
-  onDeleted: () => void;
+  onSave: (company: Company) => Promise<Company>;
+  onDelete: (company: Company) => Promise<void>;
+  onCreateTask: (input: { title: string; body: string; due_at?: string }) => Promise<void>;
+  onToggleTask: (task: Todo) => Promise<void>;
   onSelectPerson?: (person: Person) => void;
   onSelectDeal?: (deal: Deal) => void;
 }) {
@@ -66,8 +66,7 @@ export function CompanySheet({
     if (!draft) return;
     setSaving(true);
     try {
-      const saved = await api.updateCompany(draft);
-      onSaved(saved);
+      await onSave(draft);
       setEditingId("");
     } finally {
       setSaving(false);
@@ -76,37 +75,29 @@ export function CompanySheet({
 
   async function deleteCompany() {
     if (!company) return;
-    await api.deleteCompany(company.id);
-    onDeleted();
+    await onDelete(company);
   }
 
   async function createTask() {
     if (!company || (!taskTitle.trim() && !taskBody.trim())) return;
     setTaskBusy(true);
     try {
-      await api.createTask({
-        workspace_id: workspaceId === "all" ? undefined : workspaceId || undefined,
-        entity_type: "company",
-        entity_id: company.id,
+      await onCreateTask({
         title: taskTitle.trim(),
         body: taskBody.trim(),
         due_at: taskDueDate ? new Date(`${taskDueDate}T12:00:00`).toISOString() : undefined,
-        status: "open",
       });
       setTaskTitle("");
       setTaskBody("");
       setTaskDueDate("");
       setTaskComposerOpen(false);
-      onTaskChanged();
     } finally {
       setTaskBusy(false);
     }
   }
 
   async function completeTask(task: Todo) {
-    const saved = task.status === "done" ? await api.updateTask({ ...task, status: "open", completed_at: undefined }) : await api.completeTask(task.id);
-    void saved;
-    onTaskChanged();
+    await onToggleTask(task);
   }
 
   return (

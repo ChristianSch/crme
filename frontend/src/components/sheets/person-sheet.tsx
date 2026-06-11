@@ -15,7 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { Company, api, fullName, Person, TimelineItem, Todo } from "@/lib/api";
+import { Company, fullName, Person, TimelineItem, Todo } from "@/lib/api";
 import { firstUsefulLine, initials, relativeDate, searchable } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -24,27 +24,31 @@ export function PersonSheet({
   onOpenChange,
   companies,
   allCompanies,
-  workspaceId,
   tasks,
   timeline,
-  onSaved,
-  onDeleted,
-  onCompaniesChanged,
+  onSavePerson,
+  onDeletePerson,
+  onLinkCompany,
+  onCreateAndLinkCompany,
+  onUnlinkCompany,
   onActivityCreated,
-  onTaskChanged,
+  onCreateTask,
+  onToggleTask,
 }: {
   person: Person | null;
   onOpenChange: (open: boolean) => void;
   companies: Company[];
   allCompanies: Company[];
-  workspaceId: string;
   tasks: Todo[];
   timeline: TimelineItem[];
-  onSaved: (person: Person) => void;
-  onDeleted: () => void;
-  onCompaniesChanged: () => Promise<void>;
+  onSavePerson: (person: Person) => Promise<Person>;
+  onDeletePerson: (person: Person) => Promise<void>;
+  onLinkCompany: (companyId: string, role: string) => Promise<void>;
+  onCreateAndLinkCompany: (company: { name: string; domain: string; role: string }) => Promise<void>;
+  onUnlinkCompany: (companyId: string) => Promise<void>;
   onActivityCreated: () => void;
-  onTaskChanged: () => void;
+  onCreateTask: (input: { title: string; body: string; due_at?: string }) => Promise<void>;
+  onToggleTask: (task: Todo) => Promise<void>;
 }) {
   const [editingId, setEditingId] = useState<string>("");
   const editing = Boolean(person && editingId === person.id);
@@ -75,11 +79,10 @@ export function PersonSheet({
     if (!person || !selectedCompanyId) return;
     setCompanyBusy(true);
     try {
-      await api.linkPersonCompany(person.id, selectedCompanyId, companyRole);
+      await onLinkCompany(selectedCompanyId, companyRole);
       setSelectedCompanyId("");
       setCompanyRole("");
       setCompanyQuery("");
-      await onCompaniesChanged();
     } finally {
       setCompanyBusy(false);
     }
@@ -89,11 +92,9 @@ export function PersonSheet({
     if (!person || !companyDraft.name.trim()) return;
     setCompanyBusy(true);
     try {
-      const company = await api.createCompany({ name: companyDraft.name.trim(), domain: companyDraft.domain.trim(), workspace_id: workspaceId || undefined });
-      await api.linkPersonCompany(person.id, company.id, companyDraft.role.trim());
+      await onCreateAndLinkCompany({ name: companyDraft.name.trim(), domain: companyDraft.domain.trim(), role: companyDraft.role.trim() });
       setCompanyDraft({ name: "", domain: "", role: "" });
       setCompanyCreateOpen(false);
-      await onCompaniesChanged();
     } finally {
       setCompanyBusy(false);
     }
@@ -103,8 +104,7 @@ export function PersonSheet({
     if (!person) return;
     setCompanyBusy(true);
     try {
-      await api.unlinkPersonCompany(person.id, companyId);
-      await onCompaniesChanged();
+      await onUnlinkCompany(companyId);
     } finally {
       setCompanyBusy(false);
     }
@@ -112,50 +112,37 @@ export function PersonSheet({
 
   async function toggleMyTurn() {
     if (!person) return;
-    const saved = await api.updatePerson({ ...person, my_turn: !person.my_turn });
-    onSaved(saved);
+    await onSavePerson({ ...person, my_turn: !person.my_turn });
   }
 
   async function toggleStatus() {
     if (!person) return;
     const nextStatus = (person.status || "active").toLowerCase() === "active" ? "inactive" : "active";
-    const saved = await api.updatePerson({ ...person, status: nextStatus });
-    onSaved(saved);
+    await onSavePerson({ ...person, status: nextStatus });
   }
 
   async function deletePerson() {
     if (!person) return;
-    await api.deletePerson(person.id);
-    onDeleted();
+    await onDeletePerson(person);
   }
 
   async function completeTask(task: Todo) {
-    if (task.status === "done") {
-      await api.updateTask({ ...task, status: "open", completed_at: undefined });
-    } else {
-      await api.completeTask(task.id);
-    }
-    onTaskChanged();
+    await onToggleTask(task);
   }
 
   async function createTask() {
     if (!person || (!taskTitle.trim() && !taskBody.trim())) return;
     setTaskBusy(true);
     try {
-      await api.createTask({
-        workspace_id: workspaceId || undefined,
-        entity_type: "person",
-        entity_id: person.id,
+      await onCreateTask({
         title: taskTitle.trim(),
         body: taskBody.trim(),
         due_at: taskDueDate ? new Date(`${taskDueDate}T12:00:00`).toISOString() : undefined,
-        status: "open",
       });
       setTaskTitle("");
       setTaskBody("");
       setTaskDueDate("");
       setTaskComposerOpen(false);
-      onTaskChanged();
     } finally {
       setTaskBusy(false);
     }
@@ -188,8 +175,7 @@ export function PersonSheet({
                         if (!draft) return;
                         setSaving(true);
                         try {
-                          const saved = await api.updatePerson(draft);
-                          onSaved(saved);
+                          await onSavePerson(draft);
                           setEditingId("");
                         } finally {
                           setSaving(false);

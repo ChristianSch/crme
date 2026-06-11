@@ -43,8 +43,8 @@ export function TaskSheet({
   companies,
   deals,
   workspaceId = "",
-  onTaskChanged,
-  onDeleted,
+  onSaveTask,
+  onDeleteTask,
   onSelectPerson,
   onSelectCompany,
   onSelectDeal,
@@ -55,8 +55,8 @@ export function TaskSheet({
   companies: Company[];
   deals: Deal[];
   workspaceId?: string;
-  onTaskChanged: (task: Todo) => void;
-  onDeleted: () => void;
+  onSaveTask: (task: Todo, changes: Partial<Todo>) => Promise<Todo>;
+  onDeleteTask: (task: Todo) => Promise<void>;
   onSelectPerson?: (person: Person) => void;
   onSelectCompany?: (company: Company) => void;
   onSelectDeal?: (deal: Deal) => void;
@@ -146,8 +146,7 @@ export function TaskSheet({
     setSaving(true);
     setError("");
     try {
-      const saved = await api.updateTask({ ...task, ...changes });
-      onTaskChanged(saved);
+      await onSaveTask(task, changes);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save task");
     } finally {
@@ -208,8 +207,7 @@ export function TaskSheet({
     if (!task) return;
     setSaving(true);
     try {
-      await api.deleteTask(task.id);
-      onDeleted();
+      await onDeleteTask(task);
     } finally {
       setSaving(false);
     }

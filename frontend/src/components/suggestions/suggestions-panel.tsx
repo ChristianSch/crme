@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ConfirmAction } from "@/components/common/confirm-action";
 import { EmptyState } from "@/components/common/data-state";
 import { StatusBadge } from "@/components/common/status-badge";
-import { api, Company, fullName, Person, Suggestion } from "@/lib/api";
+import { api, type AcceptSuggestionResult, Company, fullName, Person, Suggestion } from "@/lib/api";
 import { relativeDate, searchable } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -45,12 +45,18 @@ export function SuggestionsPanel({
   companies,
   onChanged,
   onUndo,
+  onAct,
+  onLinkPerson,
+  onLinkCompany,
 }: {
   suggestions: Suggestion[];
   people: Person[];
   companies: Company[];
   onChanged: () => void | Promise<void>;
   onUndo: (undo: SuggestionUndo | null) => void;
+  onAct: (suggestion: Suggestion, action: "accept" | "dismiss" | "suppress") => Promise<AcceptSuggestionResult | null>;
+  onLinkPerson: (suggestion: Suggestion, personId: string) => Promise<void>;
+  onLinkCompany: (suggestion: Suggestion, companyId: string) => Promise<void>;
 }) {
   const [busyId, setBusyId] = useState<string>("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -73,13 +79,7 @@ export function SuggestionsPanel({
     setBusyId("batch");
     try {
       for (const suggestion of selectedSuggestions) {
-        if (action === "accept") {
-          await api.acceptSuggestion(suggestion.id);
-        } else if (action === "suppress") {
-          await api.suppressSuggestion(suggestion.id);
-        } else {
-          await api.dismissSuggestion(suggestion.id);
-        }
+        await onAct(suggestion, action);
       }
       setSelectedIds([]);
       onUndo(null);
@@ -92,12 +92,7 @@ export function SuggestionsPanel({
   async function act(suggestion: Suggestion, action: "accept" | "dismiss" | "suppress") {
     setBusyId(suggestion.id);
     try {
-      const result = action === "accept" ? await api.acceptSuggestion(suggestion.id) : null;
-      if (action === "suppress") {
-        await api.suppressSuggestion(suggestion.id);
-      } else if (action === "dismiss") {
-        await api.dismissSuggestion(suggestion.id);
-      }
+      const result = await onAct(suggestion, action);
       const undo: SuggestionUndo = {
         label: `${action === "accept" ? "Approved" : action === "suppress" ? "Suppressed" : "Dismissed"} suggestion`,
         suggestionId: suggestion.id,
@@ -117,7 +112,7 @@ export function SuggestionsPanel({
     if (!personId) return;
     setBusyId(suggestion.id);
     try {
-      await api.linkSuggestionPerson(suggestion.id, personId);
+      await onLinkPerson(suggestion, personId);
       onUndo({ label: "Linked suggestion to existing person", suggestionId: suggestion.id });
       await onChanged();
     } finally {
@@ -130,7 +125,7 @@ export function SuggestionsPanel({
     if (!companyId) return;
     setBusyId(suggestion.id);
     try {
-      await api.linkSuggestionCompany(suggestion.id, companyId);
+      await onLinkCompany(suggestion, companyId);
       onUndo({ label: "Linked suggestion to existing company", suggestionId: suggestion.id });
       await onChanged();
     } finally {

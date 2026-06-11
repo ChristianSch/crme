@@ -78,7 +78,20 @@ export function SuggestionsView({ initialSidebarCollapsed = false, initialWorksp
         <div className="mt-5 min-w-0 overflow-hidden rounded-xl border border-border bg-background">
           {shell.state === "loading" ? <TableSkeleton /> : shell.state === "error" ? <EmptyState title="We’re sorry, something went wrong" body="Please come back later and try again." /> : loadError ? <EmptyState title="Could not load suggestions" body={loadError} /> : (
             <PagedTable page={page} hasNext={hasNext} loading={loading} onPageChange={loadSuggestions}>
-              <SuggestionsPanel suggestions={filteredSuggestions} people={people} companies={companies} onChanged={() => loadSuggestions(page)} onUndo={setUndo} />
+              <SuggestionsPanel
+                suggestions={filteredSuggestions}
+                people={people}
+                companies={companies}
+                onChanged={() => loadSuggestions(page)}
+                onUndo={setUndo}
+                onAct={(suggestion, action) => {
+                  if (action === "accept") return api.acceptSuggestion(suggestion.id);
+                  if (action === "suppress") return api.suppressSuggestion(suggestion.id).then(() => null);
+                  return api.dismissSuggestion(suggestion.id).then(() => null);
+                }}
+                onLinkPerson={async (suggestion, personId) => { await api.linkSuggestionPerson(suggestion.id, personId); }}
+                onLinkCompany={async (suggestion, companyId) => { await api.linkSuggestionCompany(suggestion.id, companyId); }}
+              />
             </PagedTable>
           )}
         </div>

@@ -130,20 +130,54 @@ export function PeopleView({ initialSidebarCollapsed = false, initialWorkspaceId
         onOpenChange={(open) => !open && setSelectedPerson(null)}
         companies={linkedCompanies}
         allCompanies={companyOptions}
-        workspaceId={activeWorkspaceId}
         tasks={tasks}
         timeline={timeline}
-        onSaved={(person) => {
-          setSelectedPerson(person);
+        onSavePerson={async (person) => {
+          const saved = await api.updatePerson(person);
+          setSelectedPerson(saved);
           void loadPeople(page);
+          return saved;
         }}
-        onDeleted={() => {
+        onDeletePerson={async (person) => {
+          await api.deletePerson(person.id);
           setSelectedPerson(null);
           void loadPeople(0);
         }}
-        onCompaniesChanged={async () => setDetailRefresh((value) => value + 1)}
+        onLinkCompany={async (companyId, role) => {
+          if (!selectedPerson) return;
+          await api.linkPersonCompany(selectedPerson.id, companyId, role);
+          setDetailRefresh((value) => value + 1);
+        }}
+        onCreateAndLinkCompany={async (companyDraft) => {
+          if (!selectedPerson) return;
+          const company = await api.createCompany({ name: companyDraft.name, domain: companyDraft.domain, workspace_id: activeWorkspaceId || undefined });
+          await api.linkPersonCompany(selectedPerson.id, company.id, companyDraft.role);
+          setDetailRefresh((value) => value + 1);
+        }}
+        onUnlinkCompany={async (companyId) => {
+          if (!selectedPerson) return;
+          await api.unlinkPersonCompany(selectedPerson.id, companyId);
+          setDetailRefresh((value) => value + 1);
+        }}
         onActivityCreated={() => setDetailRefresh((value) => value + 1)}
-        onTaskChanged={() => setDetailRefresh((value) => value + 1)}
+        onCreateTask={async (input) => {
+          if (!selectedPerson) return;
+          await api.createTask({
+            workspace_id: activeWorkspaceId || undefined,
+            entity_type: "person",
+            entity_id: selectedPerson.id,
+            title: input.title,
+            body: input.body,
+            due_at: input.due_at,
+            status: "open",
+          });
+          setDetailRefresh((value) => value + 1);
+        }}
+        onToggleTask={async (task) => {
+          if (task.status === "done") await api.updateTask({ ...task, status: "open", completed_at: undefined });
+          else await api.completeTask(task.id);
+          setDetailRefresh((value) => value + 1);
+        }}
       />
     </>
   );

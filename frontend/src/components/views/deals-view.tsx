@@ -164,16 +164,58 @@ export function DealsView({ initialSidebarCollapsed = false, initialWorkspaceId 
         relationState={relationState}
         tasks={dealTasks}
         timeline={timeline}
-        onRelationsChanged={() => setRelationRefresh((value) => value + 1)}
         onActivityCreated={() => setRelationRefresh((value) => value + 1)}
-        onTaskChanged={() => setRelationRefresh((value) => value + 1)}
-        onSaved={(deal) => {
-          setSelectedDeal(deal);
+        onSaveDeal={async (deal) => {
+          const saved = await api.updateDeal(deal);
+          setSelectedDeal(saved);
           void loadDeals(page);
+          return saved;
         }}
-        onDeleted={() => {
+        onDeleteDeal={async (deal) => {
+          await api.deleteDeal(deal.id);
           setSelectedDeal(null);
           void loadDeals(0);
+        }}
+        onLinkPerson={async (personId) => {
+          if (!selectedDeal) return;
+          await api.linkDealPerson(selectedDeal.id, personId);
+          setRelationRefresh((value) => value + 1);
+        }}
+        onUnlinkPerson={async (personId) => {
+          if (!selectedDeal) return;
+          await api.unlinkDealPerson(selectedDeal.id, personId);
+          setRelationRefresh((value) => value + 1);
+        }}
+        onLinkCompany={async (companyId) => {
+          if (!selectedDeal) return;
+          await api.linkDealCompany(selectedDeal.id, companyId);
+          setRelationRefresh((value) => value + 1);
+        }}
+        onUnlinkCompany={async (companyId) => {
+          if (!selectedDeal) return;
+          await api.unlinkDealCompany(selectedDeal.id, companyId);
+          setRelationRefresh((value) => value + 1);
+        }}
+        onCreateTask={async (input) => {
+          if (!selectedDeal) return;
+          await api.createTask({
+            workspace_id: selectedDeal.workspace_id,
+            entity_type: "deal",
+            entity_id: selectedDeal.id,
+            title: input.title,
+            body: input.body,
+            due_at: input.due_at,
+            status: "open",
+          });
+          setRelationRefresh((value) => value + 1);
+        }}
+        onSaveTask={async (task, changes) => {
+          await api.updateTask({ ...task, ...changes });
+          setRelationRefresh((value) => value + 1);
+        }}
+        onCompleteTask={async (task) => {
+          await api.completeTask(task.id);
+          setRelationRefresh((value) => value + 1);
         }}
       />
     </>

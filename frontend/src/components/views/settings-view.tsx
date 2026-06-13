@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CrmRouteShell, LoginScreen, OrganizationGate, useLogout, useOrganizationSwitcher, usePersistedSidebar, usePersistedWorkspace } from "@/components/crm/crm-shared";
 import { PlainToast } from "@/components/views/toasts";
@@ -25,9 +25,12 @@ export function SettingsView({ initialSidebarCollapsed = false, initialWorkspace
   const [settingsState, setSettingsState] = useState<RelationLoadState>("idle");
   const [settingsError, setSettingsError] = useState("");
   const [toast, setToast] = useState("");
+  const requestIdRef = useRef(0);
 
   const loadSettings = useCallback(async () => {
     if (shell.state !== "ready" || !shell.selectedOrganizationId) return;
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setSettingsState("loading");
     setSettingsError("");
     try {
@@ -39,6 +42,7 @@ export function SettingsView({ initialSidebarCollapsed = false, initialWorkspace
         api.apiTokens(),
         canManage === "owner" || canManage === "admin" ? api.auditLogs() : Promise.resolve([]),
       ]);
+      if (requestId !== requestIdRef.current) return;
       setMembers(nextMembers ?? []);
       setInvitations(nextInvitations ?? []);
       setEmailAccounts(nextAccounts ?? []);
@@ -46,6 +50,7 @@ export function SettingsView({ initialSidebarCollapsed = false, initialWorkspace
       setAuditLogs(nextAuditLogs ?? []);
       setSettingsState("ready");
     } catch (error) {
+      if (requestId !== requestIdRef.current) return;
       setMembers([]);
       setEmailAccounts([]);
       setApiTokens([]);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { CrmRouteShell, LoginScreen, OrganizationGate, useLogout, useOrganizationSwitcher, usePersistedSidebar, usePersistedWorkspace } from "@/components/crm/crm-shared";
@@ -27,11 +27,14 @@ export function DashboardView({ initialSidebarCollapsed = false, initialWorkspac
   const [selectedTask, setSelectedTask] = useState<Todo | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const requestIdRef = useRef(0);
 
   const activeWorkspaceId = workspaceId === "all" ? "" : workspaceId;
 
   const loadDashboard = useCallback(async () => {
     if (shell.state !== "ready") return;
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setLoading(true);
     setLoadError("");
     try {
@@ -42,15 +45,16 @@ export function DashboardView({ initialSidebarCollapsed = false, initialWorkspac
         api.companies("", activeWorkspaceId, PAGE_SIZE, 0),
         api.deals("", activeWorkspaceId, PAGE_SIZE, 0),
       ]);
+      if (requestId !== requestIdRef.current) return;
       setTasks(taskData ?? []);
       setSuggestions(suggestionData ?? []);
       setPeople(peopleData ?? []);
       setCompanies(companyData ?? []);
       setDeals(dealData ?? []);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Could not load dashboard");
+      if (requestId === requestIdRef.current) setLoadError(error instanceof Error ? error.message : "Could not load dashboard");
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeWorkspaceId, shell.state]);
 

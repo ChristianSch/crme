@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { api, Me, OrganizationMembership, setSelectedOrganizationId, storedOrganizationId, Workspace } from "@/lib/api";
 
@@ -12,6 +12,7 @@ export function useCrmShell() {
   const [selectedOrganizationIdState, setSelectedOrganizationIdState] = useState("");
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [state, setState] = useState<ShellState>("loading");
+  const requestIdRef = useRef(0);
 
   const setLoadError = useCallback((error: unknown) => {
     const message = error instanceof Error ? error.message : "";
@@ -20,9 +21,12 @@ export function useCrmShell() {
   }, []);
 
   const loadShell = useCallback(async (organizationIdOverride = "") => {
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
     setState("loading");
     try {
       const meData = await api.me();
+      if (requestId !== requestIdRef.current) return;
       const orgs = meData.organizations ?? [];
       const storedOrg = organizationIdOverride || storedOrganizationId();
       const selectedOrg = orgs.find((org) => org.organization_id === storedOrg)?.organization_id || (orgs.length === 1 ? orgs[0].organization_id : "");
@@ -39,10 +43,11 @@ export function useCrmShell() {
 
       setSelectedOrganizationId(selectedOrg);
       const workspaceData = await api.workspaces();
+      if (requestId !== requestIdRef.current) return;
       setWorkspaces(workspaceData ?? []);
       setState("ready");
     } catch (error) {
-      setLoadError(error);
+      if (requestId === requestIdRef.current) setLoadError(error);
     }
   }, [setLoadError]);
 

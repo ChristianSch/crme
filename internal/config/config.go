@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const bundledChromeExtensionOrigin = "chrome-extension://kkfpdeggkbniiaajibbejcfcicbbilmn"
+
 type Config struct {
 	AppEnv               string
 	HTTPAddr             string
@@ -41,7 +43,7 @@ func Load() Config {
 		AppBaseURL:           env("APP_BASE_URL", "http://localhost:8080"),
 		FrontendBaseURL:      env("FRONTEND_BASE_URL", "http://localhost:3000"),
 		CookieDomain:         env("CRME_COOKIE_DOMAIN", ""),
-		AllowedOrigins:       csvEnv("CRME_ALLOWED_ORIGINS", "chrome-extension://kkfpdeggkbniiaajibbejcfcicbbilmn"),
+		AllowedOrigins:       allowedOrigins(csvEnv("CRME_ALLOWED_ORIGINS", "")),
 		MagicLinkSecret:      env("MAGIC_LINK_SECRET", "dev-secret-change-me"),
 		BootstrapOwnerEmail:  env("BOOTSTRAP_OWNER_EMAIL", ""),
 		AllowSignup:          boolEnv("CRME_ALLOW_SIGNUP", false),
@@ -103,6 +105,18 @@ func boolEnv(key string, fallback bool) bool {
 		return fallback
 	}
 	return value == "1" || value == "true" || value == "yes" || value == "on"
+}
+
+func allowedOrigins(configured []string) []string {
+	out := []string{bundledChromeExtensionOrigin}
+	seen := map[string]bool{bundledChromeExtensionOrigin: true}
+	for _, origin := range configured {
+		if !seen[origin] {
+			out = append(out, origin)
+			seen[origin] = true
+		}
+	}
+	return out
 }
 
 func csvEnv(key, fallback string) []string {

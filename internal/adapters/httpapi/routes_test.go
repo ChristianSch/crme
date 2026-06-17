@@ -147,6 +147,22 @@ func authedJSONRequest(method, path, body string) *http.Request {
 	return req
 }
 
+func TestVerifyMagicLinkSetsPersistentSessionCookie(t *testing.T) {
+	api := routeAPI(&routeAuthStoreFake{}, &routePersonStoreFake{})
+	res := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/auth/verify?token=abc", nil)
+
+	api.Handler().ServeHTTP(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", res.Code, res.Body.String())
+	}
+	setCookie := strings.Join(res.Header().Values("Set-Cookie"), ";")
+	if !strings.Contains(setCookie, "crm_session=") || !strings.Contains(setCookie, "Max-Age=2592000") {
+		t.Fatalf("expected persistent session cookie, got %v", res.Header().Values("Set-Cookie"))
+	}
+}
+
 func TestLogoutRouteRevokesSessionAndClearsCookie(t *testing.T) {
 	auth := &routeAuthStoreFake{}
 	api := routeAPI(auth, &routePersonStoreFake{})

@@ -320,6 +320,8 @@ func (a API) organizationID(r *http.Request) domain.ID {
 	return domain.ID(strings.TrimSpace(r.URL.Query().Get("organization_id")))
 }
 
+const authSessionCookieMaxAge = int((30 * 24 * time.Hour) / time.Second)
+
 func (a API) sessionCookie(value string, maxAge int) *http.Cookie {
 	cookie := &http.Cookie{Name: "crm_session", Value: value, Path: "/", HttpOnly: true, Secure: a.CookieSecure, SameSite: http.SameSiteLaxMode, MaxAge: maxAge}
 	if a.CookieDomain != "" {
@@ -333,7 +335,7 @@ func (a API) verifyMagicLink(w http.ResponseWriter, r *http.Request) {
 	if err(w, e) {
 		return
 	}
-	http.SetCookie(w, a.sessionCookie(string(id), 0))
+	http.SetCookie(w, a.sessionCookie(string(id), authSessionCookieMaxAge))
 	if a.AuthRedirectURL != "" && r.URL.Query().Get("format") != "json" {
 		redirectURL, e := url.Parse(strings.TrimRight(a.AuthRedirectURL, "/") + "/auth/verified")
 		if err(w, e) {
